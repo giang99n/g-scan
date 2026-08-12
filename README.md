@@ -17,4 +17,6 @@ Skeleton Android Kotlin cho ứng dụng scan tài liệu theo hướng local-fi
 ./gradlew assembleDebug
 ```
 
-Kiến trúc và lộ trình triển khai: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Mục tiêu và feature map sản phẩm: [docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md).
+
+Kiến trúc và thứ tự dependency kỹ thuật: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

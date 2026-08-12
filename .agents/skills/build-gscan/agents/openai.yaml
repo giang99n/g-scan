@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build GScan"
+  short_description: "Tối đa tính năng GScan không cần backend riêng"
+  default_prompt: "Dùng $build-gscan để triển khai tính năng GScan tiếp theo mà không cần backend riêng hoặc model tự train."

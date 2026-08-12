@@ -20,7 +20,7 @@ fun ScannerPlaceholderScreen(onBackClick: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text("Scanner feature", style = MaterialTheme.typography.headlineMedium)
-        Text("Ranh giới cho CameraX → crop → filter → OCR → save.")
+        Text("ML Kit Scanner → lưu local → OCR/PDF/editor.")
         Button(onClick = onBackClick, modifier = Modifier.padding(top = 20.dp)) {
             Text("Quay lại")
         }

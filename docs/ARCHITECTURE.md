@@ -2,14 +2,14 @@
 
 ## 1. Vì sao chọn kiến trúc này
 
-App kiểu iScanner không chỉ có camera. Nó còn có crop/filter ảnh, OCR, quản lý nhiều trang, tạo PDF, chia sẻ, đồng bộ cloud và các job có thể chạy lâu. Nếu UI gọi thẳng CameraX, Room hoặc OCR SDK thì sau vài feature code sẽ khó test và khó thay SDK.
+GScan hướng tới bộ công cụ scan/PDF phong phú nhưng không có backend riêng. Vì scanner, OCR, PDF, storage, biometric và provider cloud đều có thể thay đổi độc lập, UI không được gọi thẳng SDK.
 
-GScan dùng **feature-first + Clean Architecture thực dụng + MVVM/UDF**:
+GScan dùng **feature-first + Clean Architecture thực dụng + MVVM/UDF + local-first**:
 
-- **Feature-first** gom code theo nghiệp vụ (`documents`, `scanner`, `editor`, `ocr`, `export`) để một thay đổi ít chạm sang feature khác.
-- **Clean Architecture** giữ nghiệp vụ không phụ thuộc framework. `domain` chỉ biết model, repository interface và use case.
-- **MVVM/UDF** tạo một chiều dữ liệu: UI gửi event → ViewModel gọi use case → repository cập nhật Room → `Flow` phát state mới → UI render lại.
-- **Local-first** giúp tài liệu vẫn dùng được khi offline; Room là single source of truth, cloud chỉ đồng bộ với local.
+- Feature-first gom code theo nghiệp vụ để thêm nhiều công cụ mà không tạo một package `utils` khổng lồ.
+- Domain giữ business rule độc lập Android/SDK.
+- MVVM/UDF tạo luồng UI event → ViewModel → use case → repository → Flow → UI.
+- Room và app-owned files là nguồn dữ liệu local; integration bên ngoài chỉ đọc/ghi qua adapter.
 
 Liên hệ Flutter:
 
@@ -28,99 +28,128 @@ Liên hệ Flutter:
 ```text
 presentation  ───────► domain ◄─────── data
      │                    ▲               │
-     └── Android UI       │               └── Room / Camera / OCR / API
+     └── Compose/UI       │               └── Room / file / ML Kit / PDF / provider
                           │
-                    pure Kotlin
+                     pure Kotlin
 ```
 
-`domain` không import Android, Room, CameraX hay ML Kit. Hilt module ở composition root nối `DocumentRepository` với `OfflineDocumentRepository`, tương tự việc override một Riverpod provider bằng implementation thật.
+- `domain` không import Android, Room, ML Kit, OpenCV hay PDF SDK.
+- Data adapter map lỗi SDK/storage/provider thành error của app.
+- Hilt module tại composition root nối contract với implementation, tương tự override Riverpod provider.
+- Không tạo `BaseViewModel`, `BaseRepository`, `BaseUseCase` hoặc multi-module nếu chưa giải quyết vấn đề thật.
 
-## 3. Cấu trúc hiện tại
+## 3. Cấu trúc package mục tiêu
 
 ```text
 com.example.gscan/
-├── app/                         # Navigation graph, app shell
+├── app/                         # Navigation, app shell
 ├── core/
-│   ├── database/                # Room database, DAO, entity
-│   └── designsystem/            # Theme và component dùng chung
-├── di/                          # Composition root của Hilt
+│   ├── database/                # Room, transaction
+│   ├── storage/                 # Atomic copy, URI, cleanup, encryption
+│   ├── designsystem/            # Theme, shared UI
+│   └── common/                  # Error/coroutine abstractions thật sự dùng chung
+├── di/                          # Composition root
 └── feature/
-    ├── documents/
-    │   ├── data/                # Mapper + repository implementation
-    │   ├── domain/              # Model, repository contract, use case
-    │   └── presentation/        # Screen, UiState, ViewModel
-    └── scanner/
-        └── presentation/        # Điểm vào cho camera pipeline
+    ├── scanner/                 # ML Kit scanner / gallery / import adapters
+    ├── documents/               # Library, folder, tag, trash, search
+    ├── editor/                  # Page operations, annotation, signature, redaction
+    ├── ocr/                     # Recognition, index, searchable-text data
+    ├── export/                  # PDF/JPEG/TXT, compression, print, share
+    ├── security/                # App lock, encryption, protected PDF
+    ├── backup/                  # Archive và provider adapters
+    └── tools/                   # QR, measure, count, math, assistant
 ```
 
-Hiện tại project giữ **một Gradle module `:app`** nhưng ranh giới package đã rõ. Đây là điểm cân bằng tốt cho giai đoạn đầu: build nhanh, refactor ít, không có nhiều boilerplate. Khi team lớn hoặc build chậm, có thể tách lần lượt thành `:core:database`, `:core:designsystem`, `:feature:scanner`, `:feature:documents` mà không phải đổi business API.
+Chỉ tạo package khi bắt đầu có code của feature; cây trên là ranh giới định hướng, không phải yêu cầu scaffold trước.
 
-Không tạo class `BaseViewModel`, `BaseRepository` hay `BaseUseCase` nếu chúng chưa mang hành vi thật; abstraction chỉ được thêm khi có ít nhất hai use case rõ ràng.
-
-## 4. Các feature nên triển khai
-
-1. **scanner**: CameraX preview/capture, phát hiện biên, perspective correction. Camera chỉ tạo file ảnh tạm và trả về `CapturedPage`; không tự ghi database.
-2. **editor**: crop, rotate, reorder, filter ảnh. Lưu thao tác chỉnh sửa dưới dạng metadata để có thể render lại, tránh ghi đè ảnh gốc.
-3. **documents**: quản lý document/page, tag, search, trash. Đây là feature local-first và là nguồn state cho màn hình home.
-4. **ocr**: nhận dạng text theo từng page, lưu text và ngôn ngữ. SDK OCR nằm ở `data`, domain chỉ thấy `TextRecognizer` interface.
-5. **export**: tạo PDF/JPEG, quality/compression, watermark và share qua `FileProvider`.
-6. **sync**: upload file + metadata, conflict resolution, retry. Chỉ thêm khi backend/cloud thực sự xuất hiện.
-7. **subscription/settings**: entitlement, giới hạn export/OCR, cấu hình chất lượng.
-
-## 5. Pipeline scan đề xuất
+## 4. Pipeline ingest và xử lý
 
 ```text
-CameraX capture
-   → lưu ảnh gốc trong app storage
-   → detect 4 góc / perspective correction
-   → tạo preview nhẹ cho UI
-   → user crop, filter, reorder
-   → transaction lưu Document + Pages vào Room
-   → enqueue OCR/PDF bằng WorkManager
-   → cập nhật trạng thái DRAFT → PROCESSING → READY/FAILED
+ML Kit Scanner / Gallery / PDF / Sharesheet
+   → content URI
+   → validate MIME, size, free space
+   → copy atomically vào app-owned storage
+   → transaction Document + Pages
+   → document available
+      ├── thumbnail
+      ├── OCR/index
+      ├── edit operation log/metadata
+      ├── export/share/print
+      └── backup/provider upload
 ```
 
-Việc nặng, cần tiếp tục khi app ra background (OCR hàng loạt, export, upload) dùng **WorkManager**. Tác vụ chỉ cần sống cùng màn hình dùng coroutine trong `viewModelScope`. Không dùng WorkManager cho camera preview hoặc filter realtime.
+- Không giữ lâu URI tạm do scanner/provider trả về; copy file cần sở hữu trước.
+- Với SAF URI mà người dùng muốn app tiếp tục truy cập, chỉ persist permission khi provider hỗ trợ và use case thực sự cần.
+- Không để OCR/export/backup lỗi làm document đã lưu không mở được.
+- Tách status cho ingest, OCR, export và backup.
+- Dùng temp file + atomic rename khi platform/filesystem cho phép; commit database và cleanup theo thứ tự tránh metadata trỏ tới file thiếu.
 
-Mỗi job phải có unique work name theo document để tránh enqueue trùng, lưu progress để UI quan sát, và chỉ lưu URI/path trong input data; không nhét bitmap vào WorkManager/Bundle.
+## 5. Scanner và editor
 
-## 6. Data model mục tiêu
+- Bắt đầu với ML Kit Document Scanner để có auto-capture, crop, perspective, rotate và filter bằng model/flow có sẵn.
+- App không xin quyền `CAMERA` khi chỉ dùng luồng ML Kit Scanner.
+- Có thể thêm CameraX/OpenCV bất cứ lúc nào nếu feature yêu cầu custom viewfinder, realtime controls hoặc thuật toán mà ML Kit không expose. Đây không phải thay đổi bị khóa theo phase.
+- Coi JPEG đã copy từ scanner là source page bất biến; mọi edit tạo metadata/operation hoặc derived file.
+- Reorder/add/delete/rotate không ghi đè source.
+- Redaction phải rasterize/flatten hoặc xóa content gốc tương ứng; overlay màu đen đơn thuần không phải redaction an toàn.
+
+## 6. PDF và OCR
+
+- `PdfDocument` phù hợp tạo PDF từ canvas nhưng không cung cấp merge/split/password/searchable-text/compression đầy đủ. Đánh giá thư viện PDF có license phù hợp cho các năng lực này.
+- Kiểm soát dung lượng bằng downsample và JPEG quality trước khi vẽ/trộn vào PDF.
+- OCR chạy theo page, idempotent, có version/model metadata để re-index khi engine đổi.
+- Search dùng Room FTS khi dữ liệu đủ lớn; không `LIKE %query%` trên toàn bộ OCR text.
+- Searchable PDF cần map bounding box OCR vào page coordinate và thêm invisible text layer bằng thư viện hỗ trợ; kiểm tra copy/search text trên các viewer phổ biến.
+- Export DOCX/XLSX/PPTX phải định nghĩa rõ mapping; không tuyên bố bảo toàn layout nếu chỉ nhúng ảnh hoặc text.
+
+## 7. Data model định hướng
 
 ```text
-documents(id, title, status, created_at, updated_at, deleted_at)
-pages(id, document_id, position, original_uri, processed_uri, crop_points, filter)
-ocr_results(page_id, text, language, updated_at)
-exports(id, document_id, type, output_uri, status, created_at)
-sync_queue(id, aggregate_id, operation, retry_count, state)
+documents(id, title, state, favorite, folder_id, created_at, updated_at, deleted_at)
+pages(id, document_id, position, source_uri, width, height, rotation, created_at)
+edit_operations(id, page_id, type, payload, order_index)
+ocr_results(page_id, text, language, engine_version, status, error_code, updated_at)
+folders(id, parent_id, name, created_at, updated_at)
+tags(id, name)
+document_tags(document_id, tag_id)
+exports(id, document_id, format, preset, output_uri, status, error_code, created_at)
+backup_records(id, provider, remote_id, content_hash, status, updated_at)
 ```
 
-File ảnh/PDF nằm trong app storage; database chỉ giữ URI/path và metadata. Một document xóa mềm trước, sau đó cleanup worker mới xóa file để có thể phục hồi và tránh orphan file khi transaction lỗi.
+- Chỉ thêm bảng khi feature bắt đầu cần; dùng migration, không destructive migration.
+- `pageCount` nên derive từ Pages hoặc cập nhật trong cùng transaction.
+- Không tạo `sync_queue` cho cloud riêng vì GScan không vận hành backend.
+- File lớn nằm trong storage; database chỉ giữ URI/path, metadata, OCR và edit operations.
 
-## 7. Quy ước state và lỗi
+## 8. Background work và hiệu năng
 
-- Mỗi screen có một immutable `UiState`; UI không giữ business state bằng `remember`.
-- Event một lần như snackbar/navigation đi qua event channel riêng, không nhét vào state lâu dài.
-- Data layer map exception của SDK/network thành lỗi của domain; UI không kiểm tra `SQLiteException` hay exception của ML Kit.
-- Repository trả `Flow` cho dữ liệu quan sát liên tục và `suspend` cho command.
-- Mọi write liên quan Document + Pages dùng Room transaction.
+- Dùng coroutine cho job nhỏ gắn với màn hình.
+- Dùng WorkManager khi job phải tiếp tục sau background/process death: OCR batch, export lớn, cleanup hoặc provider upload.
+- WorkManager input chỉ chứa ID/URI/path nhỏ; không chứa bitmap hoặc file bytes.
+- Đặt unique work theo document + operation, hỗ trợ progress/cancel/retry và kiểm tra idempotency.
+- Decode ảnh theo target size, dùng streaming/page-by-page và cache thumbnail có giới hạn.
+- Kiểm tra peak memory, disk space và cancellation với tài liệu hàng trăm trang.
 
-## 8. Khi nào tách multi-module
+## 9. Security, backup và integration
 
-Tách module khi có một trong các dấu hiệu: nhiều developer cùng sửa một feature, build incremental chậm rõ rệt, cần enforce dependency bằng Gradle, hoặc feature có thể tái sử dụng. Thứ tự tách an toàn:
+- Share file app sở hữu qua `FileProvider`/content URI và temporary read permission.
+- Dùng Android Keystore, BiometricPrompt và crypto/PDF library chuẩn; không tự thiết kế crypto.
+- Không nhúng API secret dùng chung trong APK.
+- OAuth mobile dùng authorization code + PKCE theo provider; token lưu bằng cơ chế mã hóa phù hợp.
+- Android Auto Backup giữ tắt cho tới khi Room và toàn bộ file có restore nhất quán; ưu tiên explicit encrypted archive backup/restore.
+- Cloud riêng, web portal, realtime collaboration, expiring share link và remote logout bị loại vì cần server state/authorization do GScan vận hành.
 
-1. `:core:model`, `:core:database`, `:core:designsystem`
-2. `:feature:documents`
-3. Các feature nặng như `:feature:scanner`, `:feature:ocr`, `:feature:export`
-4. `:app` chỉ còn navigation và wiring
+## 10. Thứ tự theo dependency
 
-Không dùng dynamic feature module cho scanner ở giai đoạn đầu; camera là luồng chính và người dùng cần mở ngay.
+Không chia phase. Khi chọn feature tiếp theo, ưu tiên lát cắt mở khóa nhiều năng lực:
 
-## 9. Lộ trình kỹ thuật
+```text
+scanner/import
+  → storage + Document/Page
+  → document library + page editor
+  → OCR + FTS
+  → PDF/editor/sign/security
+  → provider integration và tools độc lập
+```
 
-- **M1:** Documents + Pages schema, CameraX capture, permission, file storage.
-- **M2:** Crop/perspective/filter và editor nhiều trang.
-- **M3:** WorkManager pipeline cho OCR + PDF, progress/retry.
-- **M4:** Search OCR, share/export, trash/cleanup.
-- **M5:** Auth/subscription/cloud sync nếu product cần.
-
-Mỗi milestone nên có unit test cho use case/mapper, Room migration test và ít nhất một Compose UI test cho happy path.
+Feature độc lập như QR scanner, app lock hoặc print có thể triển khai bất cứ lúc nào. Mỗi lát cắt phải có acceptance criteria, build thành công và ghi rõ phần cần kiểm tra thủ công trên thiết bị thật. Không yêu cầu unit test.
