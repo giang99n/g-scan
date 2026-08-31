@@ -4,12 +4,41 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.gscan.feature.backup.presentation.BackupScreen
 import com.example.gscan.feature.documents.presentation.DocumentsRoute
-import com.example.gscan.feature.scanner.presentation.ScannerPlaceholderScreen
+import com.example.gscan.feature.editor.presentation.SignatureScreen
+import com.example.gscan.feature.export.presentation.PdfToolsScreen
+import com.example.gscan.feature.home.presentation.HomeFeature
+import com.example.gscan.feature.home.presentation.HomeScreen
+import com.example.gscan.feature.ocr.presentation.OcrScreen
+import com.example.gscan.feature.scanner.presentation.ImportScreen
+import com.example.gscan.feature.scanner.presentation.ScannerScreen
+import com.example.gscan.feature.security.presentation.SecurityScreen
+import com.example.gscan.feature.tools.presentation.QrBarcodeScreen
 
 private object Route {
+    const val HOME = "home"
     const val DOCUMENTS = "documents"
     const val SCANNER = "scanner"
+    const val IMPORT = "import"
+    const val OCR = "ocr"
+    const val PDF_TOOLS = "pdf_tools"
+    const val SIGNATURE = "signature"
+    const val QR_BARCODE = "qr_barcode"
+    const val SECURITY = "security"
+    const val BACKUP = "backup"
+}
+
+private fun HomeFeature.toRoute(): String = when (this) {
+    HomeFeature.SCANNER -> Route.SCANNER
+    HomeFeature.DOCUMENTS -> Route.DOCUMENTS
+    HomeFeature.IMPORT -> Route.IMPORT
+    HomeFeature.OCR -> Route.OCR
+    HomeFeature.PDF_TOOLS -> Route.PDF_TOOLS
+    HomeFeature.SIGNATURE -> Route.SIGNATURE
+    HomeFeature.QR_BARCODE -> Route.QR_BARCODE
+    HomeFeature.SECURITY -> Route.SECURITY
+    HomeFeature.BACKUP -> Route.BACKUP
 }
 
 @Composable
@@ -18,13 +47,40 @@ fun GScanApp() {
 
     NavHost(
         navController = navController,
-        startDestination = Route.DOCUMENTS,
+        startDestination = Route.HOME,
     ) {
+        composable(Route.HOME) {
+            HomeScreen(onFeatureClick = { navController.navigate(it.toRoute()) })
+        }
         composable(Route.DOCUMENTS) {
-            DocumentsRoute(onScanClick = { navController.navigate(Route.SCANNER) })
+            DocumentsRoute(
+                onBackClick = navController::navigateUp,
+                onScanClick = { navController.navigate(Route.SCANNER) },
+            )
         }
         composable(Route.SCANNER) {
-            ScannerPlaceholderScreen(onBackClick = navController::navigateUp)
+            ScannerScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.IMPORT) {
+            ImportScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.OCR) {
+            OcrScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.PDF_TOOLS) {
+            PdfToolsScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.SIGNATURE) {
+            SignatureScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.QR_BARCODE) {
+            QrBarcodeScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.SECURITY) {
+            SecurityScreen(onBackClick = navController::navigateUp)
+        }
+        composable(Route.BACKUP) {
+            BackupScreen(onBackClick = navController::navigateUp)
         }
     }
 }

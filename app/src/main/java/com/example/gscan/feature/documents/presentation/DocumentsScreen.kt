@@ -19,8 +19,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -28,30 +26,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.gscan.core.designsystem.component.GScanTopAppBar
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
 
 @Composable
 fun DocumentsRoute(
+    onBackClick: () -> Unit,
     onScanClick: () -> Unit,
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     DocumentsScreen(
         uiState = uiState,
+        onBackClick = onBackClick,
         onScanClick = onScanClick,
         onCreateDemoClick = viewModel::createDemoDocument,
     )
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 private fun DocumentsScreen(
     uiState: DocumentsUiState,
+    onBackClick: () -> Unit,
     onScanClick: () -> Unit,
     onCreateDemoClick: () -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("GScan") }) },
+        topBar = {
+            GScanTopAppBar(
+                title = "Tài liệu",
+                onBackClick = onBackClick,
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onScanClick) {
                 Text("Scan", modifier = Modifier.padding(horizontal = 16.dp))
