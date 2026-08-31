@@ -26,7 +26,7 @@ class OfflineScanRepository @Inject constructor(
     private val storage: DocumentFileStorage,
     private val operationLock: DocumentOperationLock,
 ) : ScanRepository {
-    override suspend fun saveScan(
+    override suspend fun saveDocument(
         title: String,
         sourceUris: List<String>,
     ): String {
@@ -38,7 +38,7 @@ class OfflineScanRepository @Inject constructor(
             val documentId = UUID.randomUUID().toString()
             val now = System.currentTimeMillis()
             try {
-                val storedPages = storage.copyScannerPages(documentId, sourceUris)
+                val storedPages = storage.copyDocumentPages(documentId, sourceUris)
                 database.withTransaction {
                     database.documentDao().insertDocumentWithPages(
                         document = DocumentEntity(
@@ -66,8 +66,14 @@ class OfflineScanRepository @Inject constructor(
                 }
                 documentId
             } catch (error: CancellationException) {
-                cleanupAfterCancellation(documentId)
-                throw error
+                when (documentCommitState(documentId)) {
+                    true -> documentId
+                    false -> {
+                        cleanupUncommittedDocument(documentId)
+                        throw error
+                    }
+                    null -> throw error
+                }
             } catch (error: Exception) {
                 val commitState = documentCommitState(documentId)
                 when (commitState) {
@@ -87,11 +93,9 @@ class OfflineScanRepository @Inject constructor(
         }
     }
 
-    private suspend fun cleanupAfterCancellation(documentId: String) {
-        if (documentCommitState(documentId) == false) {
-            withContext(NonCancellable) {
-                runCatching { storage.deleteDocument(documentId) }
-            }
+    private suspend fun cleanupUncommittedDocument(documentId: String) {
+        withContext(NonCancellable) {
+            runCatching { storage.deleteDocument(documentId) }
         }
     }
 

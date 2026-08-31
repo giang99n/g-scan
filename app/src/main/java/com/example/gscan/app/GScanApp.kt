@@ -79,7 +79,15 @@ fun GScanApp() {
             )
         }
         composable(Route.IMPORT) {
-            ImportScreen(onBackClick = navController::navigateUp)
+            ImportScreen(
+                onBackClick = navController::navigateUp,
+                onDocumentSaved = {
+                    navController.navigate(Route.DOCUMENTS) {
+                        popUpTo(Route.IMPORT) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
         composable(Route.OCR) {
             OcrScreen(onBackClick = navController::navigateUp)

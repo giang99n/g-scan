@@ -8,7 +8,7 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-class SaveScannedDocumentUseCase @Inject constructor(
+class SaveImportedImagesUseCase @Inject constructor(
     private val repository: ScanRepository,
 ) {
     suspend operator fun invoke(sourceUris: List<String>): String {
@@ -18,10 +18,9 @@ class SaveScannedDocumentUseCase @Inject constructor(
         if (sourceUris.size > MAX_DOCUMENT_PAGES) {
             throw ScanSaveException(ScanSaveFailure.TOO_MANY_PAGES)
         }
-        val title = SimpleDateFormat("'Tài liệu' dd-MM-yyyy HH:mm", Locale.getDefault())
+
+        val title = SimpleDateFormat("'Ảnh nhập' dd-MM-yyyy HH:mm", Locale.getDefault())
             .format(Date())
         return repository.saveDocument(title, sourceUris)
     }
 }
-
-const val MAX_DOCUMENT_PAGES = 100

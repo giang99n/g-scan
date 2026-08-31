@@ -88,13 +88,15 @@ Triển khai ingest hiện tại lưu source bất biến tại:
 
 ```text
 files/documents/<document-id>/page-0001.jpg
-files/documents/<document-id>/page-0002.jpg
+files/documents/<document-id>/page-0002.png
 ...
 ```
 
-Mỗi trang được ghi vào file `.part`, `fsync`, rồi rename trong thư mục staging. Chỉ sau khi toàn bộ thư mục được rename sang tên document chính thức, repository mới transaction `Document + Pages` vào Room. Nếu transaction lỗi, thư mục document vừa tạo được xóa.
+Phần mở rộng ưu tiên MIME nhận diện từ header ảnh, fallback về MIME provider và dùng `.img` nếu vẫn không xác định được. Nội dung luôn được kiểm tra bằng header trước khi commit. EXIF rotation/mirror không sửa source bất biến: storage dùng nó để tính kích thước hiển thị, còn image decoder áp dụng transform sau khi downsample. Mỗi trang được ghi vào file `.part`, `fsync`, rồi rename trong thư mục staging. Chỉ sau khi toàn bộ thư mục được rename sang tên document chính thức, repository mới transaction `Document + Pages` vào Room. Nếu transaction lỗi, thư mục document vừa tạo được xóa.
 
-Ingest, delete và startup reconciliation dùng chung một mutex để không thể đối chiếu/xóa file trong lúc transaction khác đang chạy. Khi coroutine bị cancel, repository kiểm tra document đã commit trong Room hay chưa dưới `NonCancellable`: record đã commit thì giữ file, chưa commit thì cleanup. Khi app khởi động, reconciler xóa staging còn sót và thư mục document không có ID tương ứng trong Room; nếu Room không đọc được thì không đụng tới file.
+Luồng import ảnh độc lập dùng Android Photo Picker với ordered selection khi implementation hệ thống hỗ trợ. Picker không yêu cầu quyền đọc toàn bộ thư viện; URI được copy ngay trong callback. Vì fallback `ACTION_OPEN_DOCUMENT` trên thiết bị cũ có thể không áp dụng giới hạn của picker, domain luôn kiểm tra lại tối đa 100 trang trước khi ingest.
+
+Ingest, delete và startup reconciliation dùng chung một mutex để không thể đối chiếu/xóa file trong lúc transaction khác đang chạy. Khi coroutine bị cancel, repository kiểm tra document đã commit trong Room hay chưa dưới `NonCancellable`: record đã commit được trả về như kết quả thành công để UI không báo hủy giả, chưa commit thì cleanup. Khi app khởi động, reconciler xóa staging còn sót và thư mục document không có ID tương ứng trong Room; nếu Room không đọc được thì không đụng tới file.
 
 ## 5. Scanner và editor
 

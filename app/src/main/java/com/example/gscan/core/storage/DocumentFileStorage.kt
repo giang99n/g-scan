@@ -5,7 +5,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.storage.StorageManager
+import android.webkit.MimeTypeMap
 import androidx.core.net.toUri
+import com.example.gscan.core.image.readImageOrientation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
@@ -13,6 +15,8 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 data class StoredPage(
@@ -41,7 +45,7 @@ class DocumentFileStorage @Inject constructor(
     private val documentsRoot: File
         get() = File(context.filesDir, DOCUMENTS_DIRECTORY)
 
-    suspend fun copyScannerPages(
+    suspend fun copyDocumentPages(
         documentId: String,
         sourceUris: List<String>,
     ): List<StoredPage> = withContext(Dispatchers.IO) {
@@ -64,22 +68,27 @@ class DocumentFileStorage @Inject constructor(
         try {
             ensureFreeSpace(sourceUris.map(String::toUri), root)
 
-            val stagedPages = sourceUris.mapIndexed { index, source ->
-                copyPage(
+            val stagedPages = mutableListOf<StagedPage>()
+            for ((index, source) in sourceUris.withIndex()) {
+                currentCoroutineContext().ensureActive()
+                stagedPages += copyPage(
                     sourceUri = source.toUri(),
                     destinationDirectory = stagingDirectory,
                     position = index,
                 )
             }
 
+            currentCoroutineContext().ensureActive()
             if (!stagingDirectory.renameTo(finalDirectory)) {
                 throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
             }
             movedToFinal = true
 
-            stagedPages.mapIndexed { index, page ->
-                page.copy(
-                    sourceUri = Uri.fromFile(pageFile(finalDirectory, index)).toString(),
+            stagedPages.map { page ->
+                StoredPage(
+                    sourceUri = Uri.fromFile(File(finalDirectory, page.fileName)).toString(),
+                    width = page.width,
+                    height = page.height,
                 )
             }
         } catch (error: DocumentStorageException) {
@@ -139,48 +148,65 @@ class DocumentFileStorage @Inject constructor(
         root.usableSpace
     }
 
-    private fun copyPage(
+    private suspend fun copyPage(
         sourceUri: Uri,
         destinationDirectory: File,
         position: Int,
-    ): StoredPage {
+    ): StagedPage {
         val mimeType = context.contentResolver.getType(sourceUri)
         if (mimeType != null && !mimeType.startsWith("image/")) {
             throw DocumentStorageException(StorageFailureReason.INVALID_IMAGE)
         }
 
-        val destination = pageFile(destinationDirectory, position)
-        val temporary = File(destinationDirectory, "${destination.name}.part")
+        val temporary = File(
+            destinationDirectory,
+            "page-${(position + 1).toString().padStart(4, '0')}.part",
+        )
         val input = context.contentResolver.openInputStream(sourceUri)
             ?: throw DocumentStorageException(StorageFailureReason.SOURCE_UNAVAILABLE)
 
         input.use { source ->
             FileOutputStream(temporary).use { output ->
-                source.copyTo(output, COPY_BUFFER_BYTES)
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val bytesRead = source.read(buffer)
+                    if (bytesRead < 0) break
+                    output.write(buffer, 0, bytesRead)
+                }
                 output.fd.sync()
             }
         }
 
-        if (temporary.length() <= 0L || !temporary.renameTo(destination)) {
-            temporary.delete()
-            throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
-        }
-
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(destination.absolutePath, bounds)
+        BitmapFactory.decodeFile(temporary.absolutePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
             throw DocumentStorageException(StorageFailureReason.INVALID_IMAGE)
         }
 
-        return StoredPage(
-            sourceUri = Uri.fromFile(destination).toString(),
-            width = bounds.outWidth,
-            height = bounds.outHeight,
+        val extension = MimeTypeMap.getSingleton()
+            .getExtensionFromMimeType(bounds.outMimeType ?: mimeType)
+            ?.lowercase()
+            ?.takeIf { it.length <= MAX_EXTENSION_LENGTH && it.all(Char::isLetterOrDigit) }
+            ?: DEFAULT_IMAGE_EXTENSION
+        val destination = pageFile(destinationDirectory, position, extension)
+        if (!temporary.renameTo(destination)) {
+            throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+        }
+
+        val orientation = destination.readImageOrientation()
+        val displayedWidth = if (orientation.swapsDimensions) bounds.outHeight else bounds.outWidth
+        val displayedHeight = if (orientation.swapsDimensions) bounds.outWidth else bounds.outHeight
+
+        return StagedPage(
+            fileName = destination.name,
+            width = displayedWidth,
+            height = displayedHeight,
         )
     }
 
-    private fun pageFile(directory: File, position: Int): File =
-        File(directory, "page-${(position + 1).toString().padStart(4, '0')}.jpg")
+    private fun pageFile(directory: File, position: Int, extension: String): File =
+        File(directory, "page-${(position + 1).toString().padStart(4, '0')}.$extension")
 
     private fun deleteDirectory(file: File) {
         if (file.exists() && !file.deleteRecursively()) {
@@ -193,5 +219,13 @@ class DocumentFileStorage @Inject constructor(
         const val STAGING_SUFFIX = "-staging"
         const val COPY_BUFFER_BYTES = 64 * 1024
         const val MIN_FREE_SPACE_BYTES = 10L * 1024L * 1024L
+        const val MAX_EXTENSION_LENGTH = 8
+        const val DEFAULT_IMAGE_EXTENSION = "img"
     }
 }
+
+private data class StagedPage(
+    val fileName: String,
+    val width: Int,
+    val height: Int,
+)

@@ -28,10 +28,11 @@ ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic đư�
 ### 2.1 Năng lực đã triển khai
 
 - ML Kit Document Scanner chế độ đầy đủ, scan tối đa 100 trang và cho phép chọn ảnh từ gallery trong flow của SDK.
-- Kết quả JPEG được copy khỏi URI tạm vào app-owned storage trước khi lưu metadata.
+- Photo Picker cho phép nhập độc lập tối đa 100 ảnh, ưu tiên ordered selection khi hệ thống hỗ trợ và không cần quyền đọc toàn bộ thư viện.
+- Ảnh scan/import được kiểm tra định dạng rồi copy khỏi URI tạm vào app-owned storage trước khi lưu metadata; định dạng mã hóa và EXIF orientation của nguồn được bảo toàn khi hiển thị.
 - Room schema v2 lưu `Document + Page` trong transaction; cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
 - Library hiển thị thumbnail/số trang thật và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
-- Chưa có luồng import độc lập, thao tác page/editor, OCR, export PDF và các nhóm công cụ còn lại trong feature map.
+- Chưa có import PDF/Sharesheet, thao tác page/editor, OCR, export PDF và các nhóm công cụ còn lại trong feature map.
 
 ## 3. Feature map mục tiêu
 

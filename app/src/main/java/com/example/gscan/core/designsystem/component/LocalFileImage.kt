@@ -2,6 +2,7 @@ package com.example.gscan.core.designsystem.component
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.LruCache
 import androidx.core.net.toUri
 import androidx.compose.foundation.Image
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import com.example.gscan.core.image.readImageOrientation
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -108,7 +110,31 @@ private fun String.decodeSampledBitmap(maxSizePx: Int): Bitmap? {
         sampleSize *= 2
     }
     val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-    return BitmapFactory.decodeFile(file.absolutePath, options)
+    val decoded = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+    val orientation = file.readImageOrientation()
+    if (orientation.rotationDegrees == 0 && !orientation.isFlippedHorizontally) {
+        return decoded
+    }
+
+    val transform = Matrix().apply {
+        if (orientation.isFlippedHorizontally) {
+            postScale(-1f, 1f)
+        }
+        if (orientation.rotationDegrees != 0) {
+            postRotate(orientation.rotationDegrees.toFloat())
+        }
+    }
+    return Bitmap.createBitmap(
+        decoded,
+        0,
+        0,
+        decoded.width,
+        decoded.height,
+        transform,
+        true,
+    ).also { transformed ->
+        if (transformed !== decoded) decoded.recycle()
+    }
 }
 
 private const val BYTES_PER_KILOBYTE = 1024

@@ -3,7 +3,6 @@ package com.example.gscan.feature.scanner.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gscan.feature.scanner.domain.model.ScanSaveException
-import com.example.gscan.feature.scanner.domain.model.ScanSaveFailure
 import com.example.gscan.feature.scanner.domain.usecase.SaveScannedDocumentUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -48,7 +47,9 @@ class ScannerViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: ScanSaveException) {
-                _uiState.value = ScannerUiState(errorMessage = error.failure.toMessage())
+                _uiState.value = ScannerUiState(
+                    errorMessage = error.failure.toUserMessage(SaveInputKind.SCAN),
+                )
             } catch (_: Exception) {
                 _uiState.value = ScannerUiState(
                     errorMessage = "Không thể lưu tài liệu. Các file tạm đã được dọn dẹp, hãy thử lại.",
@@ -71,16 +72,4 @@ class ScannerViewModel @Inject constructor(
         _uiState.update { it.copy(isPreparingScanner = false, errorMessage = message) }
     }
 
-}
-
-private fun ScanSaveFailure.toMessage(): String = when (this) {
-    ScanSaveFailure.NO_PAGES -> "Không có trang nào để lưu."
-    ScanSaveFailure.SOURCE_UNAVAILABLE -> "Không còn quyền đọc kết quả scan. Vui lòng scan lại."
-    ScanSaveFailure.STORAGE_FULL -> "Thiết bị không đủ dung lượng để lưu tài liệu."
-    ScanSaveFailure.INVALID_IMAGE -> "Một trang scan bị lỗi hoặc không đúng định dạng ảnh."
-    ScanSaveFailure.DATABASE_ERROR ->
-        "Không thể ghi tài liệu vào thư viện. Các file vừa tạo đã được dọn dẹp."
-    ScanSaveFailure.CLEANUP_FAILED ->
-        "Lưu tài liệu thất bại và chưa thể dọn hết file tạm. GScan sẽ thử dọn lại khi mở app."
-    ScanSaveFailure.UNKNOWN -> "Không thể lưu tài liệu. Vui lòng thử lại."
 }
