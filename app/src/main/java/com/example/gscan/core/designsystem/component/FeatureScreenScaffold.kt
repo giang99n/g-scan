@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 fun GScanTopAppBar(
     title: String,
     onBackClick: () -> Unit,
+    navigationEnabled: Boolean = true,
 ) {
     TopAppBar(
         title = {
@@ -32,7 +33,7 @@ fun GScanTopAppBar(
             )
         },
         navigationIcon = {
-            IconButton(onClick = onBackClick) {
+            IconButton(onClick = onBackClick, enabled = navigationEnabled) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Quay lại")
             }
         },

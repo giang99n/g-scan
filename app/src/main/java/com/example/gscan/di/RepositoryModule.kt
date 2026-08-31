@@ -2,6 +2,8 @@ package com.example.gscan.di
 
 import com.example.gscan.feature.documents.data.OfflineDocumentRepository
 import com.example.gscan.feature.documents.domain.repository.DocumentRepository
+import com.example.gscan.feature.scanner.data.OfflineScanRepository
+import com.example.gscan.feature.scanner.domain.repository.ScanRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -16,4 +18,10 @@ abstract class RepositoryModule {
     abstract fun bindDocumentRepository(
         implementation: OfflineDocumentRepository,
     ): DocumentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindScanRepository(
+        implementation: OfflineScanRepository,
+    ): ScanRepository
 }

@@ -10,6 +10,20 @@ data class ScannedDocument(
     val updatedAtEpochMillis: Long,
 )
 
+data class ScannedDocumentDetails(
+    val document: ScannedDocument,
+    val pages: List<ScannedPage>,
+)
+
+data class ScannedPage(
+    val id: String,
+    val position: Int,
+    val sourceUri: String,
+    val width: Int,
+    val height: Int,
+    val rotationDegrees: Int,
+)
+
 enum class DocumentStatus {
     DRAFT,
     PROCESSING,

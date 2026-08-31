@@ -1,6 +1,6 @@
 # GScan
 
-Skeleton Android Kotlin cho ứng dụng scan tài liệu theo hướng local-first.
+Ứng dụng Android Kotlin scan tài liệu theo hướng local-first.
 
 ## Stack
 
@@ -10,6 +10,18 @@ Skeleton Android Kotlin cho ứng dụng scan tài liệu theo hướng local-fi
 - Hilt cho dependency injection
 - Room làm nguồn dữ liệu local duy nhất (single source of truth)
 - Navigation Compose
+- ML Kit Document Scanner
+- App-owned file storage với atomic copy
+
+## Luồng đang hoạt động
+
+```text
+ML Kit Scanner → JPEG URI tạm → app-owned storage
+    → transaction Room Document + Pages
+    → Library thumbnail → mở lại tài liệu nhiều trang
+```
+
+Flow scanner chạy on-device qua Google Play services và không yêu cầu GScan khai báo quyền `CAMERA`. Lần chạy đầu có thể cần mạng để tải module.
 
 ## Chạy project
 

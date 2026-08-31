@@ -17,7 +17,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GScanDatabase =
-        Room.databaseBuilder(context, GScanDatabase::class.java, "gscan.db").build()
+        Room.databaseBuilder(context, GScanDatabase::class.java, "gscan.db")
+            .addMigrations(GScanDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideDocumentDao(database: GScanDatabase): DocumentDao = database.documentDao()

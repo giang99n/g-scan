@@ -84,6 +84,18 @@ ML Kit Scanner / Gallery / PDF / Sharesheet
 - Tách status cho ingest, OCR, export và backup.
 - Dùng temp file + atomic rename khi platform/filesystem cho phép; commit database và cleanup theo thứ tự tránh metadata trỏ tới file thiếu.
 
+Triển khai ingest hiện tại lưu source bất biến tại:
+
+```text
+files/documents/<document-id>/page-0001.jpg
+files/documents/<document-id>/page-0002.jpg
+...
+```
+
+Mỗi trang được ghi vào file `.part`, `fsync`, rồi rename trong thư mục staging. Chỉ sau khi toàn bộ thư mục được rename sang tên document chính thức, repository mới transaction `Document + Pages` vào Room. Nếu transaction lỗi, thư mục document vừa tạo được xóa.
+
+Ingest, delete và startup reconciliation dùng chung một mutex để không thể đối chiếu/xóa file trong lúc transaction khác đang chạy. Khi coroutine bị cancel, repository kiểm tra document đã commit trong Room hay chưa dưới `NonCancellable`: record đã commit thì giữ file, chưa commit thì cleanup. Khi app khởi động, reconciler xóa staging còn sót và thư mục document không có ID tương ứng trong Room; nếu Room không đọc được thì không đụng tới file.
+
 ## 5. Scanner và editor
 
 - Bắt đầu với ML Kit Document Scanner để có auto-capture, crop, perspective, rotate và filter bằng model/flow có sẵn.
@@ -121,13 +133,15 @@ backup_records(id, provider, remote_id, content_hash, status, updated_at)
 - Không tạo `sync_queue` cho cloud riêng vì GScan không vận hành backend.
 - File lớn nằm trong storage; database chỉ giữ URI/path, metadata, OCR và edit operations.
 
+Schema hiện tại là version 2. Bảng `pages` có foreign key cascade tới `documents` và unique index `(documentId, position)`. Migration `1 → 2` giữ các document demo cũ nhưng đưa chúng về `DRAFT`, `pageCount = 0` vì version 1 chưa có source page thật.
+
 ## 8. Background work và hiệu năng
 
 - Dùng coroutine cho job nhỏ gắn với màn hình.
 - Dùng WorkManager khi job phải tiếp tục sau background/process death: OCR batch, export lớn, cleanup hoặc provider upload.
 - WorkManager input chỉ chứa ID/URI/path nhỏ; không chứa bitmap hoặc file bytes.
 - Đặt unique work theo document + operation, hỗ trợ progress/cancel/retry và kiểm tra idempotency.
-- Decode ảnh theo target size, dùng streaming/page-by-page và cache thumbnail có giới hạn.
+- Decode ảnh theo target size, dùng streaming/page-by-page và cache thumbnail có giới hạn. Preview local hiện dùng LRU cache tối đa 1/16 heap, giới hạn trong khoảng 4–32 MB.
 - Kiểm tra peak memory, disk space và cancellation với tài liệu hàng trăm trang.
 
 ## 9. Security, backup và integration

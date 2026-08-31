@@ -25,6 +25,14 @@ Không chia phạm vi thành Phase, POC, MVP hay Commercial. Một tính năng k
 
 ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic được tải động qua Google Play services. Lần dùng đầu có thể cần mạng; thiết bị dưới 1,7 GB RAM có thể trả `UNSUPPORTED`. Khi chỉ dùng scanner này, app không cần khai báo hoặc xin quyền `CAMERA`.
 
+### 2.1 Năng lực đã triển khai
+
+- ML Kit Document Scanner chế độ đầy đủ, scan tối đa 100 trang và cho phép chọn ảnh từ gallery trong flow của SDK.
+- Kết quả JPEG được copy khỏi URI tạm vào app-owned storage trước khi lưu metadata.
+- Room schema v2 lưu `Document + Page` trong transaction; cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
+- Library hiển thị thumbnail/số trang thật và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
+- Chưa có luồng import độc lập, thao tác page/editor, OCR, export PDF và các nhóm công cụ còn lại trong feature map.
+
 ## 3. Feature map mục tiêu
 
 ### 3.1 Scan và nhập tài liệu
