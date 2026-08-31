@@ -14,7 +14,8 @@ class DocumentStorageReconciler @Inject constructor(
     suspend fun reconcile() {
         operationLock.mutex.withLock {
             val persistedDocumentIds = database.documentDao().getAllIds().toSet()
-            storage.reconcile(persistedDocumentIds)
+            val persistedPageUris = database.documentDao().getAllPageSourceUris().toSet()
+            storage.reconcile(persistedDocumentIds, persistedPageUris)
         }
     }
 }

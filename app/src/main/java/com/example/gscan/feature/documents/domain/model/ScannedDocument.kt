@@ -5,6 +5,7 @@ data class ScannedDocument(
     val title: String,
     val pageCount: Int,
     val thumbnailUri: String?,
+    val thumbnailRotationDegrees: Int,
     val status: DocumentStatus,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
@@ -30,3 +31,17 @@ enum class DocumentStatus {
     READY,
     FAILED,
 }
+
+enum class PageEditFailure {
+    DOCUMENT_NOT_FOUND,
+    PAGE_NOT_FOUND,
+    LAST_PAGE,
+    INVALID_POSITION,
+    STORAGE,
+    UNKNOWN,
+}
+
+class PageEditException(
+    val reason: PageEditFailure,
+    cause: Throwable? = null,
+) : RuntimeException(reason.name, cause)

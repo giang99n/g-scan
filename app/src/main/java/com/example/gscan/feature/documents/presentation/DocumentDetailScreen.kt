@@ -3,21 +3,42 @@ package com.example.gscan.feature.documents.presentation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.RotateRight
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +48,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gscan.core.designsystem.component.GScanTopAppBar
 import com.example.gscan.core.designsystem.component.LocalFileImage
 import com.example.gscan.feature.documents.domain.model.ScannedPage
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun DocumentDetailRoute(
@@ -34,20 +58,93 @@ fun DocumentDetailRoute(
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    DocumentDetailScreen(uiState = uiState, onBackClick = onBackClick)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+    val latestUiState by rememberUpdatedState(uiState)
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is DocumentDetailEffect.ShowMessage -> launch {
+                    snackbarHostState.showSnackbar(effect.message)
+                }
+                is DocumentDetailEffect.PageMoved -> {
+                    launch {
+                        val position = withTimeoutOrNull(PAGE_MOVE_SCROLL_TIMEOUT_MILLIS) {
+                            snapshotFlow {
+                                latestUiState.details?.pages?.indexOfFirst { it.id == effect.pageId }
+                            }.first { position -> position == effect.targetPosition }
+                        }
+                        if (position != null) {
+                            listState.animateScrollToItem(position)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    DocumentDetailScreen(
+        uiState = uiState,
+        listState = listState,
+        snackbarHostState = snackbarHostState,
+        onBackClick = onBackClick,
+        onRotateClick = viewModel::rotateClockwise,
+        onMoveClick = viewModel::movePage,
+        onDeleteClick = viewModel::deletePage,
+    )
 }
+
+private const val PAGE_MOVE_SCROLL_TIMEOUT_MILLIS = 2_000L
 
 @Composable
 private fun DocumentDetailScreen(
     uiState: DocumentDetailUiState,
+    listState: LazyListState,
+    snackbarHostState: SnackbarHostState,
     onBackClick: () -> Unit,
+    onRotateClick: (String) -> Unit,
+    onMoveClick: (String, Int) -> Unit,
+    onDeleteClick: (String) -> Unit,
 ) {
+    var pendingDeletePageId by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingDeletePage = uiState.details?.pages?.firstOrNull { it.id == pendingDeletePageId }
+
+    if (pendingDeletePage != null) {
+        AlertDialog(
+            onDismissRequest = { if (!uiState.isMutating) pendingDeletePageId = null },
+            title = { Text("Xóa trang ${pendingDeletePage.position + 1}?") },
+            text = { Text("Trang sẽ bị xóa khỏi tài liệu và không thể hoàn tác.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !uiState.isMutating,
+                    onClick = {
+                        pendingDeletePageId = null
+                        onDeleteClick(pendingDeletePage.id)
+                    },
+                ) {
+                    Text("Xóa")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !uiState.isMutating,
+                    onClick = { pendingDeletePageId = null },
+                ) {
+                    Text("Hủy")
+                }
+            },
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             GScanTopAppBar(
                 title = uiState.details?.document?.title ?: "Tài liệu",
                 onBackClick = onBackClick,
+                navigationEnabled = !uiState.isMutating,
             )
         },
     ) { innerPadding ->
@@ -75,12 +172,23 @@ private fun DocumentDetailScreen(
             )
 
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                items(uiState.details.pages, key = { it.id }) { page ->
-                    DocumentPage(page)
+                itemsIndexed(uiState.details.pages, key = { _, page -> page.id }) { index, page ->
+                    DocumentPage(
+                        page = page,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < uiState.details.pages.lastIndex,
+                        canDelete = uiState.details.pages.size > 1,
+                        controlsEnabled = !uiState.isMutating,
+                        onMoveUp = { onMoveClick(page.id, index - 1) },
+                        onMoveDown = { onMoveClick(page.id, index + 1) },
+                        onRotate = { onRotateClick(page.id) },
+                        onDelete = { pendingDeletePageId = page.id },
+                    )
                 }
             }
         }
@@ -88,9 +196,22 @@ private fun DocumentDetailScreen(
 }
 
 @Composable
-private fun DocumentPage(page: ScannedPage) {
-    val aspectRatio = if (page.width > 0 && page.height > 0) {
-        (page.width.toFloat() / page.height.toFloat()).coerceIn(0.35f, 2.5f)
+private fun DocumentPage(
+    page: ScannedPage,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    canDelete: Boolean,
+    controlsEnabled: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRotate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val swapsDimensions = page.rotationDegrees % 180 != 0
+    val displayedWidth = if (swapsDimensions) page.height else page.width
+    val displayedHeight = if (swapsDimensions) page.width else page.height
+    val aspectRatio = if (displayedWidth > 0 && displayedHeight > 0) {
+        (displayedWidth.toFloat() / displayedHeight.toFloat()).coerceIn(0.35f, 2.5f)
     } else {
         0.7f
     }
@@ -99,12 +220,29 @@ private fun DocumentPage(page: ScannedPage) {
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Text(
-            text = "Trang ${page.position + 1}",
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Trang ${page.position + 1}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            IconButton(onClick = onMoveUp, enabled = controlsEnabled && canMoveUp) {
+                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Đưa trang lên")
+            }
+            IconButton(onClick = onMoveDown, enabled = controlsEnabled && canMoveDown) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Đưa trang xuống")
+            }
+            IconButton(onClick = onRotate, enabled = controlsEnabled) {
+                Icon(Icons.AutoMirrored.Rounded.RotateRight, contentDescription = "Xoay trang sang phải")
+            }
+            IconButton(onClick = onDelete, enabled = controlsEnabled && canDelete) {
+                Icon(Icons.Rounded.Delete, contentDescription = "Xóa trang")
+            }
+        }
         LocalFileImage(
             uri = page.sourceUri,
             contentDescription = "Trang ${page.position + 1}",
@@ -113,6 +251,7 @@ private fun DocumentPage(page: ScannedPage) {
                 .aspectRatio(aspectRatio)
                 .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
             maxDecodeSizePx = 1200,
+            rotationDegrees = page.rotationDegrees,
         )
     }
 }

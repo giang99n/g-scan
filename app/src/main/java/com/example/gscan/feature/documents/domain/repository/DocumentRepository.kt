@@ -9,5 +9,11 @@ interface DocumentRepository {
 
     fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?>
 
+    suspend fun rotatePageClockwise(documentId: String, pageId: String)
+
+    suspend fun movePage(documentId: String, pageId: String, targetPosition: Int)
+
+    suspend fun deletePage(documentId: String, pageId: String)
+
     suspend fun delete(id: String)
 }

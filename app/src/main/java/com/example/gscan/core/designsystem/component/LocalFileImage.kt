@@ -33,8 +33,10 @@ fun LocalFileImage(
     modifier: Modifier = Modifier,
     maxDecodeSizePx: Int = 1200,
     contentScale: ContentScale = ContentScale.Fit,
+    rotationDegrees: Int = 0,
 ) {
-    val cacheKey = "$uri@$maxDecodeSizePx"
+    val normalizedRotation = rotationDegrees.normalizedRotation()
+    val cacheKey = "$uri@$maxDecodeSizePx#$normalizedRotation"
     val imageState by produceState<LocalFileImageState>(
         initialValue = LocalFileImageState.Loading,
         cacheKey,
@@ -47,7 +49,7 @@ fun LocalFileImage(
                 if (cached != null) {
                     LocalFileImageState.Success(cached)
                 } else {
-                    val decoded = uri.decodeSampledBitmap(maxDecodeSizePx)
+                    val decoded = uri.decodeSampledBitmap(maxDecodeSizePx, normalizedRotation)
                     if (decoded != null) {
                         LocalBitmapCache.put(cacheKey, decoded)
                         LocalFileImageState.Success(decoded)
@@ -94,7 +96,7 @@ private object LocalBitmapCache : LruCache<String, Bitmap>(CACHE_SIZE_KB) {
         (value.allocationByteCount / BYTES_PER_KILOBYTE).coerceAtLeast(1)
 }
 
-private fun String.decodeSampledBitmap(maxSizePx: Int): Bitmap? {
+private fun String.decodeSampledBitmap(maxSizePx: Int, userRotationDegrees: Int): Bitmap? {
     val path = toUri().path ?: return null
     val file = File(path)
     if (!file.isFile) return null
@@ -112,7 +114,10 @@ private fun String.decodeSampledBitmap(maxSizePx: Int): Bitmap? {
     val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
     val decoded = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
     val orientation = file.readImageOrientation()
-    if (orientation.rotationDegrees == 0 && !orientation.isFlippedHorizontally) {
+    if (orientation.rotationDegrees == 0 &&
+        !orientation.isFlippedHorizontally &&
+        userRotationDegrees == 0
+    ) {
         return decoded
     }
 
@@ -122,6 +127,9 @@ private fun String.decodeSampledBitmap(maxSizePx: Int): Bitmap? {
         }
         if (orientation.rotationDegrees != 0) {
             postRotate(orientation.rotationDegrees.toFloat())
+        }
+        if (userRotationDegrees != 0) {
+            postRotate(userRotationDegrees.toFloat())
         }
     }
     return Bitmap.createBitmap(
@@ -136,6 +144,8 @@ private fun String.decodeSampledBitmap(maxSizePx: Int): Bitmap? {
         if (transformed !== decoded) decoded.recycle()
     }
 }
+
+private fun Int.normalizedRotation(): Int = ((this % 360) + 360) % 360
 
 private const val BYTES_PER_KILOBYTE = 1024
 private val CACHE_SIZE_KB = (

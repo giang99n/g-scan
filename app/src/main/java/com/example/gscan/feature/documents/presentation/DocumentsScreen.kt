@@ -152,6 +152,7 @@ private fun DocumentCard(
             DocumentThumbnail(
                 uri = document.thumbnailUri,
                 title = document.title,
+                rotationDegrees = document.thumbnailRotationDegrees,
             )
             Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                 Text(document.title, style = MaterialTheme.typography.titleMedium)
@@ -170,6 +171,7 @@ private fun DocumentCard(
 private fun DocumentThumbnail(
     uri: String?,
     title: String,
+    rotationDegrees: Int,
 ) {
     Card(
         modifier = Modifier
@@ -185,6 +187,7 @@ private fun DocumentThumbnail(
             modifier = Modifier.fillMaxSize(),
             maxDecodeSizePx = THUMBNAIL_MAX_SIZE_PX,
             contentScale = ContentScale.Crop,
+            rotationDegrees = rotationDegrees,
         )
     }
 }

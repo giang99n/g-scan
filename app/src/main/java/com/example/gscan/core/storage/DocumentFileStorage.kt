@@ -114,15 +114,47 @@ class DocumentFileStorage @Inject constructor(
         deleteDirectory(File(documentsRoot, ".$documentId-staging"))
     }
 
-    suspend fun reconcile(persistedDocumentIds: Set<String>) = withContext(Dispatchers.IO) {
+    suspend fun deletePage(documentId: String, sourceUri: String) = withContext(Dispatchers.IO) {
+        val source = sourceUri.toUri().path?.let(::File)
+            ?: throw DocumentStorageException(StorageFailureReason.CLEANUP_FAILED)
+        val root = documentsRoot.canonicalFile
+        val expectedDirectory = File(root, documentId).canonicalFile
+        val sourceFile = source.canonicalFile
+        val isExpectedDirectory = expectedDirectory.parentFile == root
+        val isExpectedSource = sourceFile.parentFile == expectedDirectory
+        if (!isExpectedDirectory || !isExpectedSource) {
+            throw DocumentStorageException(StorageFailureReason.CLEANUP_FAILED)
+        }
+        if (sourceFile.exists() && !sourceFile.delete()) {
+            throw DocumentStorageException(StorageFailureReason.CLEANUP_FAILED)
+        }
+    }
+
+    suspend fun reconcile(
+        persistedDocumentIds: Set<String>,
+        persistedPageUris: Set<String>,
+    ) = withContext(Dispatchers.IO) {
         val root = documentsRoot
         if (!root.exists()) return@withContext
+
+        val persistedPagePaths = persistedPageUris.mapNotNullTo(mutableSetOf()) { uri ->
+            runCatching { uri.toUri().path?.let(::File)?.canonicalPath }.getOrNull()
+        }
 
         root.listFiles().orEmpty().forEach { entry ->
             val isStaging = entry.name.startsWith(".") && entry.name.endsWith(STAGING_SUFFIX)
             val isOrphan = entry.isDirectory && entry.name !in persistedDocumentIds
-            if (isStaging || isOrphan || !entry.isDirectory) {
+            if (isStaging || isOrphan) {
                 deleteDirectory(entry)
+            } else if (entry.isDirectory) {
+                entry.listFiles().orEmpty().forEach { pageFile ->
+                    val isUnreferencedSource = pageFile.isFile &&
+                        pageFile.name.matches(SOURCE_PAGE_FILE_PATTERN) &&
+                        pageFile.canonicalPath !in persistedPagePaths
+                    if (isUnreferencedSource) {
+                        deleteDirectory(pageFile)
+                    }
+                }
             }
         }
     }
@@ -221,6 +253,7 @@ class DocumentFileStorage @Inject constructor(
         const val MIN_FREE_SPACE_BYTES = 10L * 1024L * 1024L
         const val MAX_EXTENSION_LENGTH = 8
         const val DEFAULT_IMAGE_EXTENSION = "img"
+        val SOURCE_PAGE_FILE_PATTERN = Regex("^page-\\d{4,}\\.[A-Za-z0-9]{1,8}$")
     }
 }
 

@@ -104,7 +104,11 @@ Ingest, delete và startup reconciliation dùng chung một mutex để không t
 - App không xin quyền `CAMERA` khi chỉ dùng luồng ML Kit Scanner.
 - Có thể thêm CameraX/OpenCV bất cứ lúc nào nếu feature yêu cầu custom viewfinder, realtime controls hoặc thuật toán mà ML Kit không expose. Đây không phải thay đổi bị khóa theo phase.
 - Coi JPEG đã copy từ scanner là source page bất biến; mọi edit tạo metadata/operation hoặc derived file.
-- Reorder/add/delete/rotate không ghi đè source.
+- Rotate lưu metadata theo bội số 90° và decoder áp transform khi hiển thị; reorder chỉ đổi `position`, không đổi tên hay ghi đè source.
+- Reorder/delete viết lại position liên tục và cập nhật `pageCount`, thumbnail, `updatedAt` trong cùng Room transaction. Unique index được bảo vệ bằng cách tạm dịch toàn bộ position sang một khoảng không giao nhau trước khi ghi thứ tự mới.
+- Delete page commit metadata trước rồi mới dọn file trong `NonCancellable`, nên document không bao giờ trỏ tới file đã xóa. Startup reconciliation đối chiếu cả document ID và page URI để dọn file source theo convention `page-<number>.<extension>` không còn được Room tham chiếu nếu cleanup trước đó bị gián đoạn; file derived/export khác trong cùng thư mục không bị xóa nhầm.
+- Không cho xóa trang duy nhất; xóa cả document vẫn là thao tác riêng.
+- Add/replace/duplicate page chưa được triển khai.
 - Redaction phải rasterize/flatten hoặc xóa content gốc tương ứng; overlay màu đen đơn thuần không phải redaction an toàn.
 
 ## 6. PDF và OCR
