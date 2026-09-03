@@ -34,7 +34,8 @@ ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic đư�
 - Room schema v2 lưu `Document + Page` trong transaction; cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
 - Library hiển thị thumbnail/số trang thật và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
 - Màn chi tiết cho phép xoay 90°, đổi thứ tự và xóa từng trang; source ảnh vẫn bất biến, thứ tự/page count/thumbnail được cập nhật atomically trong Room.
-- Chưa có import PDF/Sharesheet, add/replace/duplicate page, crop/filter/annotation, OCR, export PDF và các nhóm công cụ còn lại trong feature map.
+- Xuất PDF local theo đúng thứ tự/góc xoay hiện tại, ba preset độ phân giải, tiến trình/hủy, Save As qua Storage Access Framework và share bằng content URI có quyền đọc tạm thời.
+- Chưa có import PDF/Sharesheet, add/replace/duplicate page, crop/filter/annotation, OCR và các nhóm công cụ còn lại trong feature map.
 
 ## 3. Feature map mục tiêu
 

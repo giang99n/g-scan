@@ -114,6 +114,8 @@ Ingest, delete và startup reconciliation dùng chung một mutex để không t
 ## 6. PDF và OCR
 
 - `PdfDocument` phù hợp tạo PDF từ canvas nhưng không cung cấp merge/split/password/searchable-text/compression đầy đủ. Đánh giá thư viện PDF có license phù hợp cho các năng lực này.
+- Export PDF hiện tại đọc snapshot `Document + Pages`, giữ operation lock để page source không bị xóa giữa chừng, rồi encode từng trang thành JPEG và ghi ngay vào PDF chuẩn với trang A4. Mỗi lần chỉ giữ bitmap/JPEG của một trang; file `.part` được `fsync`, mở lại bằng Android `PdfRenderer` để xác minh số trang, rồi mới đổi tên atomically và cho Save As hoặc share.
+- Ba preset kiểm soát cả độ phân giải và JPEG quality. Đây là tối ưu ảnh đầu vào, không phải nén lại cấu trúc của một PDF có sẵn.
 - Kiểm soát dung lượng bằng downsample và JPEG quality trước khi vẽ/trộn vào PDF.
 - OCR chạy theo page, idempotent, có version/model metadata để re-index khi engine đổi.
 - Search dùng Room FTS khi dữ liệu đủ lớn; không `LIKE %query%` trên toàn bộ OCR text.
@@ -154,6 +156,7 @@ Schema hiện tại là version 2. Bảng `pages` có foreign key cascade tới 
 
 - Mặc định chỉ chọn giải pháp miễn phí và local/on-device. Mọi SDK, API, cloud, AI, BaaS hoặc thư viện có thể phát sinh phí phải được đánh giá mô hình giá và xin chủ dự án chấp thuận rõ ràng trước khi thêm dependency hoặc triển khai tích hợp.
 - Share file app sở hữu qua `FileProvider`/content URI và temporary read permission.
+- `FileProvider` hiện chỉ expose thư mục cache `pdf_exports/`; source page và raw app path không được expose.
 - Dùng Android Keystore, BiometricPrompt và crypto/PDF library chuẩn; không tự thiết kế crypto.
 - Không nhúng API secret dùng chung trong APK.
 - OAuth mobile dùng authorization code + PKCE theo provider; token lưu bằng cơ chế mã hóa phù hợp.

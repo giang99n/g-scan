@@ -24,6 +24,10 @@ abstract class DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
     abstract fun observeWithPages(documentId: String): Flow<DocumentWithPages?>
 
+    @Transaction
+    @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
+    abstract suspend fun getWithPages(documentId: String): DocumentWithPages?
+
     @Query("SELECT id FROM documents")
     abstract suspend fun getAllIds(): List<String>
 

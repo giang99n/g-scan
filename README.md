@@ -18,10 +18,12 @@
 ```text
 ML Kit Scanner → JPEG URI tạm → app-owned storage
     → transaction Room Document + Pages
-    → Library thumbnail → mở lại tài liệu nhiều trang
+    → Library/editor nhiều trang → xuất, Save As hoặc share PDF
 ```
 
 Flow scanner chạy on-device qua Google Play services và không yêu cầu GScan khai báo quyền `CAMERA`. Lần chạy đầu có thể cần mạng để tải module.
+
+PDF được tạo hoàn toàn local, encode tuần tự từng trang theo thứ tự/góc xoay đã lưu để giới hạn RAM. App hỗ trợ ba preset độ phân giải/JPEG quality, hủy khi đang tạo, Save As bằng Storage Access Framework và chia sẻ bằng `FileProvider`.
 
 ## Chạy project
 

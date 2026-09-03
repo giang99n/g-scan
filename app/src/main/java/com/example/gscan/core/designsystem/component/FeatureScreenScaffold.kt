@@ -1,6 +1,7 @@
 package com.example.gscan.core.designsystem.component
 
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ fun GScanTopAppBar(
     title: String,
     onBackClick: () -> Unit,
     navigationEnabled: Boolean = true,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
         title = {
@@ -37,6 +39,7 @@ fun GScanTopAppBar(
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Quay lại")
             }
         },
+        actions = actions,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
