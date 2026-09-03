@@ -152,6 +152,7 @@ Schema hiện tại là version 2. Bảng `pages` có foreign key cascade tới 
 
 ## 9. Security, backup và integration
 
+- Mặc định chỉ chọn giải pháp miễn phí và local/on-device. Mọi SDK, API, cloud, AI, BaaS hoặc thư viện có thể phát sinh phí phải được đánh giá mô hình giá và xin chủ dự án chấp thuận rõ ràng trước khi thêm dependency hoặc triển khai tích hợp.
 - Share file app sở hữu qua `FileProvider`/content URI và temporary read permission.
 - Dùng Android Keystore, BiometricPrompt và crypto/PDF library chuẩn; không tự thiết kế crypto.
 - Không nhúng API secret dùng chung trong APK.

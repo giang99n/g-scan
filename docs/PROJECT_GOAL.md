@@ -6,6 +6,7 @@ Xây dựng ứng dụng Android GScan có nhiều nhất có thể các chức 
 
 - Không xây dựng, triển khai hoặc vận hành backend riêng.
 - Không tự thu thập dữ liệu để huấn luyện, fine-tune hoặc duy trì model AI riêng.
+- Ưu tiên tuyệt đối giải pháp miễn phí, local/on-device và không phát sinh chi phí vận hành. Trước khi thêm SDK, API, cloud, AI, BaaS hoặc thư viện có thể tính phí ở hiện tại hay trong tương lai, phải trình bày chi phí/rủi ro và được chủ dự án chấp thuận rõ ràng; không tự tích hợp.
 - Được phép dùng Android framework, Google Play services, SDK/thư viện bên thứ ba, model pre-trained và dịch vụ do nhà cung cấp khác vận hành nếu phù hợp về chi phí, quyền riêng tư và license.
 - Ưu tiên xử lý local/on-device và lưu file trên thiết bị.
 - Không sao chép thương hiệu, giao diện, nội dung hoặc tài sản độc quyền của iScanner.
@@ -165,6 +166,7 @@ Scanner / Gallery / PDF import
 Một tính năng chỉ hoàn thành khi:
 
 - Không cần backend do GScan vận hành và không cần model do GScan tự train.
+- Không đưa dependency hoặc dịch vụ có thể phát sinh phí vào dự án khi chưa có chấp thuận rõ ràng của chủ dự án; nếu có lựa chọn miễn phí đáp ứng yêu cầu thì phải ưu tiên lựa chọn đó.
 - Có acceptance criteria kiểm tra được.
 - Có loading/content/empty/error và cancellation phù hợp.
 - Không làm mất document đã lưu khi OCR, export, backup hoặc integration lỗi.
