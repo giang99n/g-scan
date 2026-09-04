@@ -1,11 +1,17 @@
 package com.example.gscan.core.storage
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.os.storage.StorageManager
 import android.webkit.MimeTypeMap
+import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import com.example.gscan.core.image.readImageOrientation
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -14,7 +20,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.sqrt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -29,6 +37,10 @@ enum class StorageFailureReason {
     SOURCE_UNAVAILABLE,
     STORAGE_FULL,
     INVALID_IMAGE,
+    INVALID_PDF,
+    PDF_PASSWORD_PROTECTED,
+    TOO_MANY_PAGES,
+    INSUFFICIENT_MEMORY,
     WRITE_FAILED,
     CLEANUP_FAILED,
 }
@@ -93,8 +105,76 @@ class DocumentFileStorage @Inject constructor(
             }
         } catch (error: DocumentStorageException) {
             throw error
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: SecurityException) {
             throw DocumentStorageException(StorageFailureReason.SOURCE_UNAVAILABLE, error)
+        } catch (error: IOException) {
+            val reason = if (availableBytes(root) < MIN_FREE_SPACE_BYTES) {
+                StorageFailureReason.STORAGE_FULL
+            } else {
+                StorageFailureReason.WRITE_FAILED
+            }
+            throw DocumentStorageException(reason, error)
+        } finally {
+            if (!movedToFinal) {
+                stagingDirectory.deleteRecursively()
+            }
+        }
+    }
+
+    suspend fun renderPdfPages(
+        documentId: String,
+        sourceUri: String,
+        onProgress: (completedPages: Int, totalPages: Int) -> Unit,
+    ): List<StoredPage> = withContext(Dispatchers.IO) {
+        val root = documentsRoot.apply {
+            if (!exists() && !mkdirs()) {
+                throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+            }
+        }
+        val stagingDirectory = File(root, ".$documentId-staging")
+        val finalDirectory = File(root, documentId)
+        stagingDirectory.deleteRecursively()
+
+        if (finalDirectory.exists() || !stagingDirectory.mkdir()) {
+            throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+        }
+
+        val sourcePdf = File(stagingDirectory, PDF_SOURCE_TEMP_FILE)
+        var movedToFinal = false
+        try {
+            ensureFreeSpace(listOf(sourceUri.toUri()), root)
+            copyPdfSource(sourceUri.toUri(), sourcePdf)
+            validatePdfHeader(sourcePdf)
+
+            val stagedPages = renderPdf(sourcePdf, stagingDirectory, onProgress)
+            currentCoroutineContext().ensureActive()
+            if (!sourcePdf.delete()) {
+                throw DocumentStorageException(StorageFailureReason.CLEANUP_FAILED)
+            }
+            if (!stagingDirectory.renameTo(finalDirectory)) {
+                throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+            }
+            movedToFinal = true
+
+            stagedPages.map { page ->
+                StoredPage(
+                    sourceUri = Uri.fromFile(File(finalDirectory, page.fileName)).toString(),
+                    width = page.width,
+                    height = page.height,
+                )
+            }
+        } catch (error: DocumentStorageException) {
+            throw error
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: SecurityException) {
+            throw DocumentStorageException(StorageFailureReason.SOURCE_UNAVAILABLE, error)
+        } catch (error: RuntimeException) {
+            throw DocumentStorageException(StorageFailureReason.INVALID_PDF, error)
+        } catch (error: OutOfMemoryError) {
+            throw DocumentStorageException(StorageFailureReason.INSUFFICIENT_MEMORY, error)
         } catch (error: IOException) {
             val reason = if (availableBytes(root) < MIN_FREE_SPACE_BYTES) {
                 StorageFailureReason.STORAGE_FULL
@@ -174,8 +254,10 @@ class DocumentFileStorage @Inject constructor(
 
     @Suppress("DEPRECATION")
     private fun availableBytes(root: File): Long = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val storageManager = context.getSystemService(StorageManager::class.java)
-        storageManager.getAllocatableBytes(storageManager.getUuidForPath(root))
+        runCatching {
+            val storageManager = context.getSystemService(StorageManager::class.java)
+            storageManager.getAllocatableBytes(storageManager.getUuidForPath(root))
+        }.getOrElse { root.usableSpace }
     } else {
         root.usableSpace
     }
@@ -237,6 +319,120 @@ class DocumentFileStorage @Inject constructor(
         )
     }
 
+    private suspend fun copyPdfSource(sourceUri: Uri, destination: File) {
+        val input = context.contentResolver.openInputStream(sourceUri)
+            ?: throw DocumentStorageException(StorageFailureReason.SOURCE_UNAVAILABLE)
+        input.use { source ->
+            FileOutputStream(destination).use { output ->
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val bytesRead = source.read(buffer)
+                    if (bytesRead < 0) break
+                    output.write(buffer, 0, bytesRead)
+                }
+                output.fd.sync()
+            }
+        }
+    }
+
+    private fun validatePdfHeader(source: File) {
+        if (source.length() < PDF_HEADER.size) {
+            throw DocumentStorageException(StorageFailureReason.INVALID_PDF)
+        }
+        val prefix = ByteArray(PDF_HEADER_SEARCH_BYTES)
+        val count = source.inputStream().use { it.read(prefix) }
+        val containsHeader = (0..count - PDF_HEADER.size).any { offset ->
+            PDF_HEADER.indices.all { index -> prefix[offset + index] == PDF_HEADER[index] }
+        }
+        if (!containsHeader) {
+            throw DocumentStorageException(StorageFailureReason.INVALID_PDF)
+        }
+    }
+
+    private suspend fun renderPdf(
+        source: File,
+        destinationDirectory: File,
+        onProgress: (completedPages: Int, totalPages: Int) -> Unit,
+    ): List<StagedPage> {
+        val descriptor = ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY)
+        try {
+            val renderer = try {
+                PdfRenderer(descriptor)
+            } catch (error: SecurityException) {
+                throw DocumentStorageException(StorageFailureReason.PDF_PASSWORD_PROTECTED, error)
+            } catch (error: IOException) {
+                throw DocumentStorageException(StorageFailureReason.INVALID_PDF, error)
+            }
+            renderer.use {
+                val pageCount = renderer.pageCount
+                if (pageCount == 0) {
+                    throw DocumentStorageException(StorageFailureReason.INVALID_PDF)
+                }
+                if (pageCount > MAX_PDF_PAGES) {
+                    throw DocumentStorageException(StorageFailureReason.TOO_MANY_PAGES)
+                }
+                onProgress(0, pageCount)
+
+                return buildList(pageCount) {
+                    repeat(pageCount) { index ->
+                        currentCoroutineContext().ensureActive()
+                        renderer.openPage(index).use { page ->
+                            add(renderPdfPage(page, destinationDirectory, index))
+                        }
+                        onProgress(index + 1, pageCount)
+                    }
+                }
+            }
+        } finally {
+            descriptor.close()
+        }
+    }
+
+    private fun renderPdfPage(
+        page: PdfRenderer.Page,
+        destinationDirectory: File,
+        position: Int,
+    ): StagedPage {
+        if (availableBytes(destinationDirectory) < MIN_FREE_SPACE_BYTES) {
+            throw DocumentStorageException(StorageFailureReason.STORAGE_FULL)
+        }
+        val sourceWidth = page.width.coerceAtLeast(1)
+        val sourceHeight = page.height.coerceAtLeast(1)
+        val pixelScale = sqrt(MAX_PDF_RENDER_PIXELS.toDouble() / (sourceWidth.toLong() * sourceHeight))
+        val scale = minOf(
+            PDF_RENDER_SCALE,
+            MAX_PDF_RENDER_DIMENSION.toFloat() / sourceWidth,
+            MAX_PDF_RENDER_DIMENSION.toFloat() / sourceHeight,
+            pixelScale.toFloat(),
+        )
+        val width = (sourceWidth * scale).toInt().coerceAtLeast(1)
+        val height = (sourceHeight * scale).toInt().coerceAtLeast(1)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val temporary = File(
+            destinationDirectory,
+            "page-${(position + 1).toString().padStart(4, '0')}.part",
+        )
+        val destination = pageFile(destinationDirectory, position, PDF_PAGE_EXTENSION)
+        try {
+            Canvas(bitmap).drawColor(Color.WHITE)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            FileOutputStream(temporary).use { output ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, PDF_PAGE_JPEG_QUALITY, output)) {
+                    throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+                }
+                output.fd.sync()
+            }
+            if (!temporary.renameTo(destination)) {
+                throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+            }
+            return StagedPage(destination.name, width, height)
+        } finally {
+            bitmap.recycle()
+            temporary.delete()
+        }
+    }
+
     private fun pageFile(directory: File, position: Int, extension: String): File =
         File(directory, "page-${(position + 1).toString().padStart(4, '0')}.$extension")
 
@@ -253,6 +449,15 @@ class DocumentFileStorage @Inject constructor(
         const val MIN_FREE_SPACE_BYTES = 10L * 1024L * 1024L
         const val MAX_EXTENSION_LENGTH = 8
         const val DEFAULT_IMAGE_EXTENSION = "img"
+        const val PDF_SOURCE_TEMP_FILE = ".source.pdf.part"
+        const val PDF_PAGE_EXTENSION = "jpg"
+        const val PDF_PAGE_JPEG_QUALITY = 92
+        const val PDF_RENDER_SCALE = 2f
+        const val MAX_PDF_RENDER_DIMENSION = 2_400
+        const val MAX_PDF_RENDER_PIXELS = 8_000_000
+        const val MAX_PDF_PAGES = 100
+        const val PDF_HEADER_SEARCH_BYTES = 1_024
+        val PDF_HEADER = "%PDF-".encodeToByteArray()
         val SOURCE_PAGE_FILE_PATTERN = Regex("^page-\\d{4,}\\.[A-Za-z0-9]{1,8}$")
     }
 }

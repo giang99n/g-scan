@@ -8,6 +8,9 @@ import androidx.room.Transaction
 import com.example.gscan.core.database.model.DocumentEntity
 import com.example.gscan.core.database.model.DocumentSummary
 import com.example.gscan.core.database.model.DocumentWithPages
+import com.example.gscan.core.database.model.OcrResultEntity
+import com.example.gscan.core.database.model.OcrResultWithPosition
+import com.example.gscan.core.database.model.OcrSearchEntity
 import com.example.gscan.core.database.model.PageEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -19,6 +22,19 @@ abstract class DocumentDao {
             "AS thumbnailRotationDegrees FROM documents ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeAllSummaries(): Flow<List<DocumentSummary>>
+
+    @Query(
+        "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
+            "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
+            "AS thumbnailRotationDegrees FROM documents " +
+            "WHERE title LIKE :titlePattern ESCAPE '\\' OR id IN " +
+            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery) " +
+            "ORDER BY updatedAtEpochMillis DESC",
+    )
+    abstract fun observeSearchSummaries(
+        titlePattern: String,
+        ftsQuery: String,
+    ): Flow<List<DocumentSummary>>
 
     @Transaction
     @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
@@ -39,6 +55,32 @@ abstract class DocumentDao {
 
     @Query("DELETE FROM documents WHERE id = :id")
     abstract suspend fun deleteById(id: String): Int
+
+    @Query("DELETE FROM ocr_search WHERE documentId = :documentId")
+    abstract suspend fun deleteOcrSearchByDocumentId(documentId: String)
+
+    @Query("DELETE FROM ocr_search WHERE pageId = :pageId")
+    abstract suspend fun deleteOcrSearchByPageId(pageId: String)
+
+    @Query(
+        "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
+            "INNER JOIN pages ON pages.id = ocr_results.pageId " +
+            "WHERE ocr_results.documentId = :documentId ORDER BY pages.position",
+    )
+    abstract fun observeOcrResults(documentId: String): Flow<List<OcrResultWithPosition>>
+
+    @Query(
+        "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
+            "INNER JOIN pages ON pages.id = ocr_results.pageId " +
+            "WHERE ocr_results.documentId = :documentId ORDER BY pages.position",
+    )
+    abstract suspend fun getOcrResults(documentId: String): List<OcrResultWithPosition>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertOcrResult(result: OcrResultEntity)
+
+    @Insert
+    abstract suspend fun insertOcrSearch(result: OcrSearchEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertDocument(document: DocumentEntity)
@@ -154,6 +196,7 @@ abstract class DocumentDao {
             throw PageMutationException(PageMutationFailure.LAST_PAGE)
         }
 
+        deleteOcrSearchByPageId(pageId)
         deletePageById(documentId, pageId)
         val remainingPages = pages.filterNot { it.id == pageId }
         rewritePagePositions(documentId, remainingPages)
@@ -164,6 +207,36 @@ abstract class DocumentDao {
             updatedAtEpochMillis = updatedAtEpochMillis,
         )
         return deletedPage.sourceUri
+    }
+
+    @Transaction
+    open suspend fun deleteDocument(documentId: String): Int {
+        deleteOcrSearchByDocumentId(documentId)
+        return deleteById(documentId)
+    }
+
+    @Transaction
+    open suspend fun prepareOcr(documentId: String, results: List<OcrResultEntity>) {
+        if (!exists(documentId)) throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
+        results.forEach { upsertOcrResult(it) }
+    }
+
+    @Transaction
+    open suspend fun saveOcrResult(result: OcrResultEntity) {
+        if (!exists(result.documentId)) {
+            throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
+        }
+        upsertOcrResult(result)
+        deleteOcrSearchByPageId(result.pageId)
+        if (result.text.isNotBlank()) {
+            insertOcrSearch(
+                OcrSearchEntity(
+                    pageId = result.pageId,
+                    documentId = result.documentId,
+                    text = result.text,
+                ),
+            )
+        }
     }
 
     private suspend fun requireDocumentPages(documentId: String): List<PageEntity> {

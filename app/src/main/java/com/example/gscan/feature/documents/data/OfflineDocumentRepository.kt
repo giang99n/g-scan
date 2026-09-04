@@ -23,12 +23,22 @@ class OfflineDocumentRepository @Inject constructor(
     private val storage: DocumentFileStorage,
     private val operationLock: DocumentOperationLock,
 ) : DocumentRepository {
-    override fun observeDocuments(): Flow<List<ScannedDocument>> =
-        documentDao.observeAllSummaries().map { summaries ->
-            summaries.map { summary ->
+    override fun observeDocuments(query: String): Flow<List<ScannedDocument>> {
+        val normalizedQuery = query.trim()
+        val summaries = if (normalizedQuery.isEmpty()) {
+            documentDao.observeAllSummaries()
+        } else {
+            documentDao.observeSearchSummaries(
+                titlePattern = "%${normalizedQuery.escapeLikePattern()}%",
+                ftsQuery = normalizedQuery.toFtsQuery(),
+            )
+        }
+        return summaries.map { rows ->
+            rows.map { summary ->
                 summary.document.toDomain(summary.thumbnailRotationDegrees)
             }
         }
+    }
 
     override fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?> =
         documentDao.observeWithPages(documentId).map { it?.toDomain() }
@@ -64,7 +74,7 @@ class OfflineDocumentRepository @Inject constructor(
 
     override suspend fun delete(id: String) {
         operationLock.mutex.withLock {
-            val deletedRows = documentDao.deleteById(id)
+            val deletedRows = documentDao.deleteDocument(id)
             if (deletedRows > 0) {
                 withContext(NonCancellable) {
                     // Room là source of truth. Nếu cleanup lỗi, startup reconciliation
@@ -89,6 +99,28 @@ class OfflineDocumentRepository @Inject constructor(
         }
     }
 }
+
+private fun String.escapeLikePattern(): String = buildString(length) {
+    this@escapeLikePattern.forEach { character ->
+        if (character == '\\' || character == '%' || character == '_') append('\\')
+        append(character)
+    }
+}
+
+private fun String.toFtsQuery(): String {
+    val tokens = Regex("[\\p{L}\\p{N}]+").findAll(this)
+        .map { it.value }
+        .take(MAX_SEARCH_TOKENS)
+        .toList()
+    return if (tokens.isEmpty()) {
+        NO_MATCH_FTS_QUERY
+    } else {
+        tokens.joinToString(" AND ") { token -> "\"$token\"*" }
+    }
+}
+
+private const val MAX_SEARCH_TOKENS = 8
+private const val NO_MATCH_FTS_QUERY = "gscan_no_matching_token_7f3a*"
 
 private fun PageMutationException.toDomainException() = PageEditException(
     reason = when (failure) {

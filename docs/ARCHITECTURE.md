@@ -96,6 +96,8 @@ Phần mở rộng ưu tiên MIME nhận diện từ header ảnh, fallback về
 
 Luồng import ảnh độc lập dùng Android Photo Picker với ordered selection khi implementation hệ thống hỗ trợ. Picker không yêu cầu quyền đọc toàn bộ thư viện; URI được copy ngay trong callback. Vì fallback `ACTION_OPEN_DOCUMENT` trên thiết bị cũ có thể không áp dụng giới hạn của picker, domain luôn kiểm tra lại tối đa 100 trang trước khi ingest.
 
+Luồng import PDF nhận một content URI từ Storage Access Framework hoặc `ACTION_SEND`, copy ngay vào staging rồi xác minh header và mở bằng Android `PdfRenderer`. Tối đa 100 trang được render tuần tự ở scale 2x nhưng giới hạn 2400 px/8 megapixel, flatten nền trắng và ghi JPEG chất lượng 92 trước khi commit Room. PDF nguồn tạm bị xóa trước khi đổi tên staging; cancellation, file hỏng, thiếu bộ nhớ/dung lượng và PDF có mật khẩu đều không tạo document dở dang. Đây là raster import nên không giữ text selectable, vector hay form của PDF gốc; gộp nhiều file PDF chưa nằm trong luồng này.
+
 Ingest, delete và startup reconciliation dùng chung một mutex để không thể đối chiếu/xóa file trong lúc transaction khác đang chạy. Khi coroutine bị cancel, repository kiểm tra document đã commit trong Room hay chưa dưới `NonCancellable`: record đã commit được trả về như kết quả thành công để UI không báo hủy giả, chưa commit thì cleanup. Khi app khởi động, reconciler xóa staging còn sót và thư mục document không có ID tương ứng trong Room; nếu Room không đọc được thì không đụng tới file.
 
 ## 5. Scanner và editor
@@ -117,8 +119,9 @@ Ingest, delete và startup reconciliation dùng chung một mutex để không t
 - Export PDF hiện tại đọc snapshot `Document + Pages`, giữ operation lock để page source không bị xóa giữa chừng, rồi encode từng trang thành JPEG và ghi ngay vào PDF chuẩn với trang A4. Mỗi lần chỉ giữ bitmap/JPEG của một trang; file `.part` được `fsync`, mở lại bằng Android `PdfRenderer` để xác minh số trang, rồi mới đổi tên atomically và cho Save As hoặc share.
 - Ba preset kiểm soát cả độ phân giải và JPEG quality. Đây là tối ưu ảnh đầu vào, không phải nén lại cấu trúc của một PDF có sẵn.
 - Kiểm soát dung lượng bằng downsample và JPEG quality trước khi vẽ/trộn vào PDF.
-- OCR chạy theo page, idempotent, có version/model metadata để re-index khi engine đổi.
-- Search dùng Room FTS khi dữ liệu đủ lớn; không `LIKE %query%` trên toàn bộ OCR text.
+- OCR chạy theo page trong unique WorkManager job `document-ocr-<documentId>`, dùng bundled Latin model của ML Kit Text Recognition nên inference hoàn toàn on-device và không cần tải model ở lần dùng đầu. Ảnh được downsample tối đa 2400 px, áp EXIF + rotation metadata rồi xử lý tuần tự để giới hạn memory.
+- `ocr_results` lưu text, script, engine version, status/error và thời điểm theo `pageId`; `ocr_search` là FTS4 `unicode61` phục vụ tìm nội dung. Chạy lại là idempotent và giữ text/index thành công trước đó cho tới khi trang có kết quả mới, nên lỗi/cancel OCR không làm mất document hay kết quả cũ.
+- Search Library dùng `LIKE` đã escape cho title và prefix query đã tokenize an toàn cho Room FTS; không quét `LIKE %query%` trên toàn bộ OCR text.
 - Searchable PDF cần map bounding box OCR vào page coordinate và thêm invisible text layer bằng thư viện hỗ trợ; kiểm tra copy/search text trên các viewer phổ biến.
 - Export DOCX/XLSX/PPTX phải định nghĩa rõ mapping; không tuyên bố bảo toàn layout nếu chỉ nhúng ảnh hoặc text.
 
@@ -141,7 +144,7 @@ backup_records(id, provider, remote_id, content_hash, status, updated_at)
 - Không tạo `sync_queue` cho cloud riêng vì GScan không vận hành backend.
 - File lớn nằm trong storage; database chỉ giữ URI/path, metadata, OCR và edit operations.
 
-Schema hiện tại là version 2. Bảng `pages` có foreign key cascade tới `documents` và unique index `(documentId, position)`. Migration `1 → 2` giữ các document demo cũ nhưng đưa chúng về `DRAFT`, `pageCount = 0` vì version 1 chưa có source page thật.
+Schema hiện tại là version 3. Bảng `pages` có foreign key cascade tới `documents` và unique index `(documentId, position)`. `ocr_results` cascade theo `pageId`; FTS index được xóa tường minh khi xóa page/document. Migration `1 → 2` giữ các document demo cũ nhưng đưa chúng về `DRAFT`, `pageCount = 0` vì version 1 chưa có source page thật; migration `2 → 3` thêm OCR result và FTS mà không thay đổi tài liệu hiện có.
 
 ## 8. Background work và hiệu năng
 

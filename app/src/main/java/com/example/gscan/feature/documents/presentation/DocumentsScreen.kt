@@ -15,7 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -24,6 +26,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -53,6 +56,7 @@ fun DocumentsRoute(
     onBackClick: () -> Unit,
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
+    title: String = "Tài liệu",
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -73,6 +77,8 @@ fun DocumentsRoute(
         onScanClick = onScanClick,
         onDocumentClick = onDocumentClick,
         onDeleteDocument = viewModel::delete,
+        onSearchQueryChange = viewModel::updateSearchQuery,
+        title = title,
     )
 }
 
@@ -84,6 +90,8 @@ private fun DocumentsScreen(
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onDeleteDocument: (String) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    title: String,
 ) {
     var pendingDeleteDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingDeleteDocument = uiState.documents.firstOrNull { it.id == pendingDeleteDocumentId }
@@ -120,7 +128,7 @@ private fun DocumentsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             GScanTopAppBar(
-                title = "Tài liệu",
+                title = title,
                 onBackClick = onBackClick,
             )
         },
@@ -130,41 +138,79 @@ private fun DocumentsScreen(
             }
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading -> Box(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-
-            uiState.errorMessage != null -> ErrorDocuments(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                message = uiState.errorMessage,
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            DocumentSearchField(
+                query = uiState.searchQuery,
+                onQueryChange = onSearchQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             )
+            when {
+                uiState.isLoading -> Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
 
-            uiState.documents.isEmpty() -> EmptyDocuments(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                onScanClick = onScanClick,
-            )
+                uiState.errorMessage != null -> ErrorDocuments(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    message = uiState.errorMessage,
+                )
 
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(uiState.documents, key = { it.id }) { document ->
-                    DocumentCard(
-                        document = document,
-                        isDeleting = uiState.deletingDocumentId == document.id,
-                        deleteEnabled = uiState.deletingDocumentId == null,
-                        onClick = { onDocumentClick(document.id) },
-                        onDeleteClick = { pendingDeleteDocumentId = document.id },
-                    )
+                uiState.documents.isEmpty() && uiState.searchQuery.isNotBlank() -> ErrorDocuments(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    message = "Không tìm thấy tài liệu phù hợp.",
+                )
+
+                uiState.documents.isEmpty() -> EmptyDocuments(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    onScanClick = onScanClick,
+                )
+
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 88.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(uiState.documents, key = { it.id }) { document ->
+                        DocumentCard(
+                            document = document,
+                            isDeleting = uiState.deletingDocumentId == document.id,
+                            deleteEnabled = uiState.deletingDocumentId == null,
+                            onClick = { onDocumentClick(document.id) },
+                            onDeleteClick = { pendingDeleteDocumentId = document.id },
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DocumentSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier,
+        singleLine = true,
+        label = { Text("Tìm tài liệu") },
+        placeholder = { Text("Tên hoặc nội dung đã nhận dạng") },
+        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Rounded.Clear, contentDescription = "Xóa nội dung tìm kiếm")
+                }
+            }
+        } else {
+            null
+        },
+    )
 }
 
 @Composable

@@ -5,7 +5,7 @@ import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
 import kotlinx.coroutines.flow.Flow
 
 interface DocumentRepository {
-    fun observeDocuments(): Flow<List<ScannedDocument>>
+    fun observeDocuments(query: String = ""): Flow<List<ScannedDocument>>
 
     fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?>
 

@@ -86,7 +86,7 @@ private data class ToolUiModel(
 )
 
 private val quickActions = listOf(
-    QuickActionUiModel(HomeFeature.IMPORT, "Nhập ảnh", Icons.Outlined.Image, Color(0xFFEFF4FF), Color(0xFF155EEF)),
+    QuickActionUiModel(HomeFeature.IMPORT, "Nhập file", Icons.Outlined.Image, Color(0xFFEFF4FF), Color(0xFF155EEF)),
     QuickActionUiModel(HomeFeature.DOCUMENTS, "Tài liệu", Icons.Outlined.Folder, Color(0xFFECFDF3), Color(0xFF039855)),
     QuickActionUiModel(HomeFeature.OCR, "Nhận dạng", Icons.Outlined.TextFields, Color(0xFFFFF6ED), Color(0xFFDC6803)),
     QuickActionUiModel(HomeFeature.PDF_TOOLS, "Công cụ PDF", Icons.Outlined.PictureAsPdf, Color(0xFFFFF1F3), Color(0xFFE31B54)),

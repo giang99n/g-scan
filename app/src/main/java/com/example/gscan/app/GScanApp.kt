@@ -1,6 +1,7 @@
 package com.example.gscan.app
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -12,7 +13,7 @@ import com.example.gscan.feature.editor.presentation.SignatureScreen
 import com.example.gscan.feature.export.presentation.PdfToolsScreen
 import com.example.gscan.feature.home.presentation.HomeFeature
 import com.example.gscan.feature.home.presentation.HomeScreen
-import com.example.gscan.feature.ocr.presentation.OcrScreen
+import com.example.gscan.feature.ocr.presentation.OcrRoute
 import com.example.gscan.feature.scanner.presentation.ImportScreen
 import com.example.gscan.feature.scanner.presentation.ScannerScreen
 import com.example.gscan.feature.security.presentation.SecurityScreen
@@ -25,6 +26,7 @@ private object Route {
     const val SCANNER = "scanner"
     const val IMPORT = "import"
     const val OCR = "ocr"
+    const val DOCUMENT_OCR = "documents/{$DOCUMENT_ID_ARGUMENT}/ocr"
     const val PDF_TOOLS = "pdf_tools"
     const val PDF_EXPORT = "documents/{$DOCUMENT_ID_ARGUMENT}/export"
     const val SIGNATURE = "signature"
@@ -46,8 +48,17 @@ private fun HomeFeature.toRoute(): String = when (this) {
 }
 
 @Composable
-fun GScanApp() {
+fun GScanApp(
+    sharedPdfUri: String? = null,
+    onSharedPdfConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
+
+    LaunchedEffect(sharedPdfUri) {
+        if (sharedPdfUri != null) {
+            navController.navigate(Route.IMPORT) { launchSingleTop = true }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -71,6 +82,9 @@ fun GScanApp() {
                 onExportClick = { documentId ->
                     navController.navigate("documents/$documentId/export")
                 },
+                onOcrClick = { documentId ->
+                    navController.navigate("documents/$documentId/ocr")
+                },
             )
         }
         composable(Route.SCANNER) {
@@ -86,6 +100,8 @@ fun GScanApp() {
         }
         composable(Route.IMPORT) {
             ImportScreen(
+                initialPdfUri = sharedPdfUri,
+                onInitialPdfConsumed = onSharedPdfConsumed,
                 onBackClick = navController::navigateUp,
                 onDocumentSaved = {
                     navController.navigate(Route.DOCUMENTS) {
@@ -96,7 +112,17 @@ fun GScanApp() {
             )
         }
         composable(Route.OCR) {
-            OcrScreen(onBackClick = navController::navigateUp)
+            DocumentsRoute(
+                title = "OCR & tìm kiếm",
+                onBackClick = navController::navigateUp,
+                onScanClick = { navController.navigate(Route.SCANNER) },
+                onDocumentClick = { documentId ->
+                    navController.navigate("documents/$documentId/ocr")
+                },
+            )
+        }
+        composable(Route.DOCUMENT_OCR) {
+            OcrRoute(onBackClick = navController::navigateUp)
         }
         composable(Route.PDF_TOOLS) {
             PdfToolsScreen(

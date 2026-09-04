@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,6 +58,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 fun DocumentDetailRoute(
     onBackClick: () -> Unit,
     onExportClick: (String) -> Unit,
+    onOcrClick: (String) -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,6 +96,9 @@ fun DocumentDetailRoute(
         onExportClick = {
             uiState.details?.document?.id?.let(onExportClick)
         },
+        onOcrClick = {
+            uiState.details?.document?.id?.let(onOcrClick)
+        },
         onRotateClick = viewModel::rotateClockwise,
         onMoveClick = viewModel::movePage,
         onDeleteClick = viewModel::deletePage,
@@ -109,6 +114,7 @@ private fun DocumentDetailScreen(
     snackbarHostState: SnackbarHostState,
     onBackClick: () -> Unit,
     onExportClick: () -> Unit,
+    onOcrClick: () -> Unit,
     onRotateClick: (String) -> Unit,
     onMoveClick: (String, Int) -> Unit,
     onDeleteClick: (String) -> Unit,
@@ -152,6 +158,12 @@ private fun DocumentDetailScreen(
                 onBackClick = onBackClick,
                 navigationEnabled = !uiState.isMutating,
                 actions = {
+                    IconButton(
+                        onClick = onOcrClick,
+                        enabled = !uiState.isMutating && uiState.details?.pages?.isNotEmpty() == true,
+                    ) {
+                        Icon(Icons.Rounded.TextFields, contentDescription = "Nhận dạng văn bản")
+                    }
                     IconButton(
                         onClick = onExportClick,
                         enabled = !uiState.isMutating && uiState.details?.pages?.isNotEmpty() == true,
