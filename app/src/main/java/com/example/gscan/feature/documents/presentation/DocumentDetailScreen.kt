@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +56,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 @Composable
 fun DocumentDetailRoute(
     onBackClick: () -> Unit,
+    onExportClick: (String) -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,6 +91,9 @@ fun DocumentDetailRoute(
         listState = listState,
         snackbarHostState = snackbarHostState,
         onBackClick = onBackClick,
+        onExportClick = {
+            uiState.details?.document?.id?.let(onExportClick)
+        },
         onRotateClick = viewModel::rotateClockwise,
         onMoveClick = viewModel::movePage,
         onDeleteClick = viewModel::deletePage,
@@ -103,6 +108,7 @@ private fun DocumentDetailScreen(
     listState: LazyListState,
     snackbarHostState: SnackbarHostState,
     onBackClick: () -> Unit,
+    onExportClick: () -> Unit,
     onRotateClick: (String) -> Unit,
     onMoveClick: (String, Int) -> Unit,
     onDeleteClick: (String) -> Unit,
@@ -145,6 +151,14 @@ private fun DocumentDetailScreen(
                 title = uiState.details?.document?.title ?: "Tài liệu",
                 onBackClick = onBackClick,
                 navigationEnabled = !uiState.isMutating,
+                actions = {
+                    IconButton(
+                        onClick = onExportClick,
+                        enabled = !uiState.isMutating && uiState.details?.pages?.isNotEmpty() == true,
+                    ) {
+                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Xuất PDF")
+                    }
+                },
             )
         },
     ) { innerPadding ->

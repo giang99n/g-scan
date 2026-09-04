@@ -26,6 +26,7 @@ private object Route {
     const val IMPORT = "import"
     const val OCR = "ocr"
     const val PDF_TOOLS = "pdf_tools"
+    const val PDF_EXPORT = "documents/{$DOCUMENT_ID_ARGUMENT}/export"
     const val SIGNATURE = "signature"
     const val QR_BARCODE = "qr_barcode"
     const val SECURITY = "security"
@@ -65,7 +66,12 @@ fun GScanApp() {
             )
         }
         composable(Route.DOCUMENT_DETAIL) {
-            DocumentDetailRoute(onBackClick = navController::navigateUp)
+            DocumentDetailRoute(
+                onBackClick = navController::navigateUp,
+                onExportClick = { documentId ->
+                    navController.navigate("documents/$documentId/export")
+                },
+            )
         }
         composable(Route.SCANNER) {
             ScannerScreen(
@@ -93,7 +99,16 @@ fun GScanApp() {
             OcrScreen(onBackClick = navController::navigateUp)
         }
         composable(Route.PDF_TOOLS) {
-            PdfToolsScreen(onBackClick = navController::navigateUp)
+            PdfToolsScreen(
+                onBackClick = navController::navigateUp,
+                onChooseDocument = { navController.navigate(Route.DOCUMENTS) },
+            )
+        }
+        composable(Route.PDF_EXPORT) {
+            PdfToolsScreen(
+                onBackClick = navController::navigateUp,
+                onChooseDocument = { navController.navigate(Route.DOCUMENTS) },
+            )
         }
         composable(Route.SIGNATURE) {
             SignatureScreen(onBackClick = navController::navigateUp)

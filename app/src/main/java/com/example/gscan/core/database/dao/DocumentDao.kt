@@ -24,6 +24,10 @@ abstract class DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
     abstract fun observeWithPages(documentId: String): Flow<DocumentWithPages?>
 
+    @Transaction
+    @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
+    abstract suspend fun getWithPages(documentId: String): DocumentWithPages?
+
     @Query("SELECT id FROM documents")
     abstract suspend fun getAllIds(): List<String>
 
@@ -34,7 +38,7 @@ abstract class DocumentDao {
     abstract suspend fun exists(documentId: String): Boolean
 
     @Query("DELETE FROM documents WHERE id = :id")
-    abstract suspend fun deleteById(id: String)
+    abstract suspend fun deleteById(id: String): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertDocument(document: DocumentEntity)

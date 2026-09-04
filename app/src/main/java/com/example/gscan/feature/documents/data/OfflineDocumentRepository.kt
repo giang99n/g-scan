@@ -64,9 +64,13 @@ class OfflineDocumentRepository @Inject constructor(
 
     override suspend fun delete(id: String) {
         operationLock.mutex.withLock {
-            documentDao.deleteById(id)
-            withContext(NonCancellable) {
-                storage.deleteDocument(id)
+            val deletedRows = documentDao.deleteById(id)
+            if (deletedRows > 0) {
+                withContext(NonCancellable) {
+                    // Room là source of truth. Nếu cleanup lỗi, startup reconciliation
+                    // sẽ nhận ra thư mục orphan và thử dọn lại an toàn.
+                    runCatching { storage.deleteDocument(id) }
+                }
             }
         }
     }
