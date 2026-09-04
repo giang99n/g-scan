@@ -38,7 +38,7 @@ abstract class DocumentDao {
     abstract suspend fun exists(documentId: String): Boolean
 
     @Query("DELETE FROM documents WHERE id = :id")
-    abstract suspend fun deleteById(id: String)
+    abstract suspend fun deleteById(id: String): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertDocument(document: DocumentEntity)

@@ -14,15 +14,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,22 +56,68 @@ fun DocumentsRoute(
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is DocumentsEffect.ShowMessage -> snackbarHostState.showSnackbar(effect.message)
+            }
+        }
+    }
+
     DocumentsScreen(
         uiState = uiState,
+        snackbarHostState = snackbarHostState,
         onBackClick = onBackClick,
         onScanClick = onScanClick,
         onDocumentClick = onDocumentClick,
+        onDeleteDocument = viewModel::delete,
     )
 }
 
 @Composable
 private fun DocumentsScreen(
     uiState: DocumentsUiState,
+    snackbarHostState: SnackbarHostState,
     onBackClick: () -> Unit,
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
+    onDeleteDocument: (String) -> Unit,
 ) {
+    var pendingDeleteDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingDeleteDocument = uiState.documents.firstOrNull { it.id == pendingDeleteDocumentId }
+
+    if (pendingDeleteDocument != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteDocumentId = null },
+            title = { Text("Xóa tài liệu?") },
+            text = {
+                Text(
+                    "“${pendingDeleteDocument.title}” và ${pendingDeleteDocument.pageCount} trang " +
+                        "sẽ bị xóa vĩnh viễn khỏi thiết bị.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteDocumentId = null
+                        onDeleteDocument(pendingDeleteDocument.id)
+                    },
+                ) {
+                    Text("Xóa", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteDocumentId = null }) {
+                    Text("Hủy")
+                }
+            },
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             GScanTopAppBar(
                 title = "Tài liệu",
@@ -97,7 +156,10 @@ private fun DocumentsScreen(
                 items(uiState.documents, key = { it.id }) { document ->
                     DocumentCard(
                         document = document,
+                        isDeleting = uiState.deletingDocumentId == document.id,
+                        deleteEnabled = uiState.deletingDocumentId == null,
                         onClick = { onDocumentClick(document.id) },
+                        onDeleteClick = { pendingDeleteDocumentId = document.id },
                     )
                 }
             }
@@ -142,9 +204,16 @@ private fun ErrorDocuments(
 @Composable
 private fun DocumentCard(
     document: ScannedDocument,
+    isDeleting: Boolean,
+    deleteEnabled: Boolean,
     onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isDeleting, onClick = onClick),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -162,6 +231,17 @@ private fun DocumentCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+            if (isDeleting) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            } else {
+                IconButton(onClick = onDeleteClick, enabled = deleteEnabled) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "Xóa ${document.title}",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }

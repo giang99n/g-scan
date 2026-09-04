@@ -33,6 +33,7 @@ ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic đư�
 - Ảnh scan/import được kiểm tra định dạng rồi copy khỏi URI tạm vào app-owned storage trước khi lưu metadata; định dạng mã hóa và EXIF orientation của nguồn được bảo toàn khi hiển thị.
 - Room schema v2 lưu `Document + Page` trong transaction; cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
 - Library hiển thị thumbnail/số trang thật và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
+- Library cho phép xóa vĩnh viễn tài liệu sau bước xác nhận; metadata được xóa trước và file orphan được cleanup ngay hoặc qua startup reconciliation nếu thao tác file bị gián đoạn.
 - Màn chi tiết cho phép xoay 90°, đổi thứ tự và xóa từng trang; source ảnh vẫn bất biến, thứ tự/page count/thumbnail được cập nhật atomically trong Room.
 - Xuất PDF local theo đúng thứ tự/góc xoay hiện tại, ba preset độ phân giải, tiến trình/hủy, Save As qua Storage Access Framework và share bằng content URI có quyền đọc tạm thời.
 - Chưa có import PDF/Sharesheet, add/replace/duplicate page, crop/filter/annotation, OCR và các nhóm công cụ còn lại trong feature map.

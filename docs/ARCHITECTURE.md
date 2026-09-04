@@ -107,7 +107,7 @@ Ingest, delete và startup reconciliation dùng chung một mutex để không t
 - Rotate lưu metadata theo bội số 90° và decoder áp transform khi hiển thị; reorder chỉ đổi `position`, không đổi tên hay ghi đè source.
 - Reorder/delete viết lại position liên tục và cập nhật `pageCount`, thumbnail, `updatedAt` trong cùng Room transaction. Unique index được bảo vệ bằng cách tạm dịch toàn bộ position sang một khoảng không giao nhau trước khi ghi thứ tự mới.
 - Delete page commit metadata trước rồi mới dọn file trong `NonCancellable`, nên document không bao giờ trỏ tới file đã xóa. Startup reconciliation đối chiếu cả document ID và page URI để dọn file source theo convention `page-<number>.<extension>` không còn được Room tham chiếu nếu cleanup trước đó bị gián đoạn; file derived/export khác trong cùng thư mục không bị xóa nhầm.
-- Không cho xóa trang duy nhất; xóa cả document vẫn là thao tác riêng.
+- Không cho xóa trang duy nhất. Xóa cả document được kích hoạt từ Library sau bước xác nhận: Room xóa metadata/pages bằng foreign-key cascade trước, rồi file được cleanup trong `NonCancellable`; nếu cleanup lỗi, startup reconciliation sẽ dọn thư mục orphan ở lần mở app tiếp theo.
 - Add/replace/duplicate page chưa được triển khai.
 - Redaction phải rasterize/flatten hoặc xóa content gốc tương ứng; overlay màu đen đơn thuần không phải redaction an toàn.
 
