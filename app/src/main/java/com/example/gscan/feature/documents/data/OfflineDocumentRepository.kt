@@ -3,18 +3,26 @@ package com.example.gscan.feature.documents.data
 import com.example.gscan.core.database.dao.DocumentDao
 import com.example.gscan.core.database.dao.PageMutationException
 import com.example.gscan.core.database.dao.PageMutationFailure
+import com.example.gscan.core.database.model.PageEntity
 import com.example.gscan.core.storage.DocumentFileStorage
 import com.example.gscan.core.storage.DocumentOperationLock
-import com.example.gscan.feature.documents.domain.model.ScannedDocument
-import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
+import com.example.gscan.core.storage.DocumentStorageException
+import com.example.gscan.core.storage.StorageFailureReason
+import com.example.gscan.feature.documents.domain.model.MAX_PAGES_PER_DOCUMENT
+import com.example.gscan.feature.documents.domain.model.DocumentEditException
+import com.example.gscan.feature.documents.domain.model.DocumentEditFailure
+import com.example.gscan.feature.documents.domain.model.DocumentStatus
 import com.example.gscan.feature.documents.domain.model.PageEditException
 import com.example.gscan.feature.documents.domain.model.PageEditFailure
+import com.example.gscan.feature.documents.domain.model.ScannedDocument
+import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
 import com.example.gscan.feature.documents.domain.repository.DocumentRepository
+import java.util.UUID
+import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
@@ -68,6 +76,81 @@ class OfflineDocumentRepository @Inject constructor(
             }
             withContext(NonCancellable) {
                 runCatching { storage.deletePage(documentId, sourceUri) }
+            }
+        }
+    }
+
+    override suspend fun addPages(documentId: String, sourceUris: List<String>) {
+        if (sourceUris.isEmpty()) throw PageEditException(PageEditFailure.NO_PAGES)
+        operationLock.mutex.withLock {
+            val currentPages = documentDao.getWithPages(documentId)?.pages
+                ?: throw PageEditException(PageEditFailure.DOCUMENT_NOT_FOUND)
+            if (currentPages.size + sourceUris.size > MAX_PAGES_PER_DOCUMENT) {
+                throw PageEditException(PageEditFailure.TOO_MANY_PAGES)
+            }
+
+            val storedPages = try {
+                storage.appendDocumentPages(documentId, sourceUris)
+            } catch (error: DocumentStorageException) {
+                throw error.toPageEditException()
+            }
+            val now = System.currentTimeMillis()
+            try {
+                withContext(NonCancellable) {
+                    documentDao.appendPages(
+                        documentId = documentId,
+                        pages = storedPages.mapIndexed { index, page ->
+                            PageEntity(
+                                id = UUID.randomUUID().toString(),
+                                documentId = documentId,
+                                position = currentPages.size + index,
+                                sourceUri = page.sourceUri,
+                                width = page.width,
+                                height = page.height,
+                                rotationDegrees = 0,
+                                createdAtEpochMillis = now,
+                            )
+                        },
+                        maxPageCount = MAX_PAGES_PER_DOCUMENT,
+                        readyStatus = DocumentStatus.READY.name,
+                        updatedAtEpochMillis = now,
+                    )
+                }
+            } catch (error: Exception) {
+                withContext(NonCancellable) {
+                    runCatching {
+                        storage.deleteStoredPages(documentId, storedPages.map { it.sourceUri })
+                    }
+                }
+                when (error) {
+                    is PageMutationException -> throw error.toDomainException()
+                    else -> throw PageEditException(PageEditFailure.UNKNOWN, error)
+                }
+            }
+        }
+    }
+
+    override suspend fun rename(documentId: String, title: String) {
+        operationLock.mutex.withLock {
+            try {
+                val currentTitle = documentDao.getDocumentTitle(documentId)
+                    ?: throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+                if (currentTitle == title) return@withLock
+
+                val updatedRows = documentDao.renameDocument(
+                    documentId = documentId,
+                    title = title,
+                    updatedAtEpochMillis = System.currentTimeMillis(),
+                )
+                if (updatedRows == 0) {
+                    throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: DocumentEditException) {
+                throw error
+            } catch (error: Exception) {
+                throw DocumentEditException(DocumentEditFailure.UNKNOWN, error)
             }
         }
     }
@@ -128,6 +211,17 @@ private fun PageMutationException.toDomainException() = PageEditException(
         PageMutationFailure.PAGE_NOT_FOUND -> PageEditFailure.PAGE_NOT_FOUND
         PageMutationFailure.LAST_PAGE -> PageEditFailure.LAST_PAGE
         PageMutationFailure.INVALID_POSITION -> PageEditFailure.INVALID_POSITION
+        PageMutationFailure.TOO_MANY_PAGES -> PageEditFailure.TOO_MANY_PAGES
+    },
+    cause = this,
+)
+
+private fun DocumentStorageException.toPageEditException() = PageEditException(
+    reason = when (reason) {
+        StorageFailureReason.SOURCE_UNAVAILABLE -> PageEditFailure.SOURCE_UNAVAILABLE
+        StorageFailureReason.STORAGE_FULL -> PageEditFailure.STORAGE_FULL
+        StorageFailureReason.INVALID_IMAGE -> PageEditFailure.INVALID_IMAGE
+        else -> PageEditFailure.STORAGE
     },
     cause = this,
 )

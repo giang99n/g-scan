@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.gscan.feature.documents.domain.usecase.ObserveDocumentDetailsUseCase
 import com.example.gscan.feature.documents.presentation.DOCUMENT_ID_ARGUMENT
 import com.example.gscan.feature.ocr.domain.model.OcrJobState
+import com.example.gscan.feature.ocr.domain.model.OcrJobStatus
 import com.example.gscan.feature.ocr.domain.model.OcrPageText
 import com.example.gscan.feature.ocr.domain.usecase.CancelOcrUseCase
 import com.example.gscan.feature.ocr.domain.usecase.ObserveOcrJobUseCase
@@ -25,6 +26,7 @@ data class OcrUiState(
     val detailsAvailable: Boolean = false,
     val title: String? = null,
     val pageCount: Int = 0,
+    val unrecognizedPageCount: Int = 0,
     val results: List<OcrPageText> = emptyList(),
     val job: OcrJobState = OcrJobState(),
     val errorMessage: String? = null,
@@ -51,13 +53,24 @@ class OcrViewModel @Inject constructor(
                 observeOcrResults(documentId),
                 observeOcrJob(documentId),
             ) { details, results, job ->
+                val pageIds = details?.pages?.mapTo(mutableSetOf()) { it.id }.orEmpty()
+                val resultPageIds = results.mapTo(mutableSetOf()) { it.pageId }
+                val unrecognizedPageCount = (pageIds - resultPageIds).size
+                val effectiveJob = if (
+                    job.status == OcrJobStatus.SUCCEEDED && unrecognizedPageCount > 0
+                ) {
+                    OcrJobState()
+                } else {
+                    job
+                }
                 OcrUiState(
                     isLoading = false,
                     detailsAvailable = details != null,
                     title = details?.document?.title,
                     pageCount = details?.pages?.size ?: 0,
+                    unrecognizedPageCount = unrecognizedPageCount,
                     results = results,
-                    job = job,
+                    job = effectiveJob,
                 )
             }.catch {
                 _uiState.update {

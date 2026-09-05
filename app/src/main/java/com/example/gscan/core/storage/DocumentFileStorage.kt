@@ -189,6 +189,87 @@ class DocumentFileStorage @Inject constructor(
         }
     }
 
+    suspend fun appendDocumentPages(
+        documentId: String,
+        sourceUris: List<String>,
+    ): List<StoredPage> = withContext(Dispatchers.IO) {
+        require(sourceUris.isNotEmpty()) { "sourceUris must not be empty" }
+
+        val root = documentsRoot.apply {
+            if (!exists() && !mkdirs()) {
+                throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+            }
+        }.canonicalFile
+        val documentDirectory = File(root, documentId).canonicalFile
+        if (documentDirectory.parentFile != root ||
+            (documentDirectory.exists() && !documentDirectory.isDirectory) ||
+            (!documentDirectory.exists() && !documentDirectory.mkdir())
+        ) {
+            throw DocumentStorageException(StorageFailureReason.WRITE_FAILED)
+        }
+        ensureFreeSpace(sourceUris.map(String::toUri), root)
+
+        val nextPosition = documentDirectory.listFiles().orEmpty()
+            .mapNotNull { file -> SOURCE_PAGE_FILE_PATTERN.matchEntire(file.name)?.groupValues?.get(1)?.toIntOrNull() }
+            .maxOrNull()
+            ?: 0
+        val createdPages = mutableListOf<StoredPage>()
+        val attemptedPositions = sourceUris.indices.map { nextPosition + it }
+        var completed = false
+        try {
+            sourceUris.forEachIndexed { index, source ->
+                currentCoroutineContext().ensureActive()
+                val stagedPage = copyPage(
+                    sourceUri = source.toUri(),
+                    destinationDirectory = documentDirectory,
+                    position = nextPosition + index,
+                )
+                createdPages += StoredPage(
+                    sourceUri = Uri.fromFile(File(documentDirectory, stagedPage.fileName)).toString(),
+                    width = stagedPage.width,
+                    height = stagedPage.height,
+                )
+            }
+            currentCoroutineContext().ensureActive()
+            completed = true
+            createdPages
+        } catch (error: DocumentStorageException) {
+            throw error
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: SecurityException) {
+            throw DocumentStorageException(StorageFailureReason.SOURCE_UNAVAILABLE, error)
+        } catch (error: IOException) {
+            val reason = if (availableBytes(root) < MIN_FREE_SPACE_BYTES) {
+                StorageFailureReason.STORAGE_FULL
+            } else {
+                StorageFailureReason.WRITE_FAILED
+            }
+            throw DocumentStorageException(reason, error)
+        } finally {
+            if (!completed) {
+                createdPages.forEach { page -> page.sourceUri.toUri().path?.let(::File)?.delete() }
+                attemptedPositions.forEach { position ->
+                    File(
+                        documentDirectory,
+                        "page-${(position + 1).toString().padStart(4, '0')}.part",
+                    ).delete()
+                }
+            }
+        }
+    }
+
+    suspend fun deleteStoredPages(documentId: String, sourceUris: List<String>) {
+        var cleanupFailed = false
+        sourceUris.forEach { sourceUri ->
+            runCatching { deletePage(documentId, sourceUri) }
+                .onFailure { cleanupFailed = true }
+        }
+        if (cleanupFailed) {
+            throw DocumentStorageException(StorageFailureReason.CLEANUP_FAILED)
+        }
+    }
+
     suspend fun deleteDocument(documentId: String) = withContext(Dispatchers.IO) {
         deleteDirectory(File(documentsRoot, documentId))
         deleteDirectory(File(documentsRoot, ".$documentId-staging"))
@@ -458,7 +539,7 @@ class DocumentFileStorage @Inject constructor(
         const val MAX_PDF_PAGES = 100
         const val PDF_HEADER_SEARCH_BYTES = 1_024
         val PDF_HEADER = "%PDF-".encodeToByteArray()
-        val SOURCE_PAGE_FILE_PATTERN = Regex("^page-\\d{4,}\\.[A-Za-z0-9]{1,8}$")
+        val SOURCE_PAGE_FILE_PATTERN = Regex("^page-(\\d{4,})\\.[A-Za-z0-9]{1,8}$")
     }
 }
 

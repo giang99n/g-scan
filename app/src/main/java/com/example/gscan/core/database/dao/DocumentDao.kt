@@ -53,8 +53,21 @@ abstract class DocumentDao {
     @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId)")
     abstract suspend fun exists(documentId: String): Boolean
 
+    @Query("SELECT title FROM documents WHERE id = :documentId LIMIT 1")
+    abstract suspend fun getDocumentTitle(documentId: String): String?
+
     @Query("DELETE FROM documents WHERE id = :id")
     abstract suspend fun deleteById(id: String): Int
+
+    @Query(
+        "UPDATE documents SET title = :title, updatedAtEpochMillis = :updatedAtEpochMillis " +
+            "WHERE id = :documentId",
+    )
+    abstract suspend fun renameDocument(
+        documentId: String,
+        title: String,
+        updatedAtEpochMillis: Long,
+    ): Int
 
     @Query("DELETE FROM ocr_search WHERE documentId = :documentId")
     abstract suspend fun deleteOcrSearchByDocumentId(documentId: String)
@@ -119,6 +132,18 @@ abstract class DocumentDao {
         documentId: String,
         pageCount: Int,
         thumbnailUri: String?,
+        updatedAtEpochMillis: Long,
+    ): Int
+
+    @Query(
+        "UPDATE documents SET pageCount = :pageCount, thumbnailUri = :thumbnailUri, " +
+            "status = :status, updatedAtEpochMillis = :updatedAtEpochMillis WHERE id = :documentId",
+    )
+    abstract suspend fun updateDocumentAfterPageAppend(
+        documentId: String,
+        pageCount: Int,
+        thumbnailUri: String,
+        status: String,
         updatedAtEpochMillis: Long,
     ): Int
 
@@ -210,6 +235,36 @@ abstract class DocumentDao {
     }
 
     @Transaction
+    open suspend fun appendPages(
+        documentId: String,
+        pages: List<PageEntity>,
+        maxPageCount: Int,
+        readyStatus: String,
+        updatedAtEpochMillis: Long,
+    ) {
+        val existingPages = requireDocumentPages(documentId)
+        if (pages.isEmpty()) return
+        if (existingPages.size + pages.size > maxPageCount) {
+            throw PageMutationException(PageMutationFailure.TOO_MANY_PAGES)
+        }
+        val expectedPositions = existingPages.size until (existingPages.size + pages.size)
+        if (pages.map(PageEntity::position) != expectedPositions.toList() ||
+            pages.any { it.documentId != documentId }
+        ) {
+            throw PageMutationException(PageMutationFailure.INVALID_POSITION)
+        }
+
+        insertPages(pages)
+        updateDocumentAfterPageAppend(
+            documentId = documentId,
+            pageCount = existingPages.size + pages.size,
+            thumbnailUri = existingPages.firstOrNull()?.sourceUri ?: pages.first().sourceUri,
+            status = readyStatus,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
+    }
+
+    @Transaction
     open suspend fun deleteDocument(documentId: String): Int {
         deleteOcrSearchByDocumentId(documentId)
         return deleteById(documentId)
@@ -262,6 +317,7 @@ enum class PageMutationFailure {
     PAGE_NOT_FOUND,
     LAST_PAGE,
     INVALID_POSITION,
+    TOO_MANY_PAGES,
 }
 
 class PageMutationException(val failure: PageMutationFailure) : IllegalStateException(failure.name)

@@ -197,6 +197,12 @@ private fun OcrJobHeader(
             )
             OutlinedButton(onClick = onCancelClick) { Text("Dừng") }
         } else {
+            if (uiState.unrecognizedPageCount > 0 && uiState.results.isNotEmpty()) {
+                Text(
+                    text = "Có ${uiState.unrecognizedPageCount} trang chưa được nhận dạng.",
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             when (uiState.job.status) {
                 OcrJobStatus.FAILED -> Text(
                     "Một số trang nhận dạng chưa thành công. Bạn có thể chạy lại.",

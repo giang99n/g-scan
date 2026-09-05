@@ -33,13 +33,13 @@ ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic đư�
 - Storage Access Framework và Android Sharesheet cho phép nhập một PDF tối đa 100 trang từ bộ nhớ, Drive, Gmail hoặc app khác. PDF không mật khẩu được render tuần tự on-device thành source page bất biến, có tiến trình/hủy và cleanup staging khi lỗi.
 - Ảnh scan/import được kiểm tra định dạng rồi copy khỏi URI tạm vào app-owned storage trước khi lưu metadata; định dạng mã hóa và EXIF orientation của nguồn được bảo toàn khi hiển thị.
 - Room schema v3 lưu `Document + Page + OCR result/index`; ingest dùng transaction, cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
-- Library hiển thị thumbnail/số trang thật và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
+- Library hiển thị thumbnail/số trang thật, hỗ trợ đổi tên và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
 - Library cho phép xóa vĩnh viễn tài liệu sau bước xác nhận; metadata được xóa trước và file orphan được cleanup ngay hoặc qua startup reconciliation nếu thao tác file bị gián đoạn.
-- Màn chi tiết cho phép xoay 90°, đổi thứ tự và xóa từng trang; source ảnh vẫn bất biến, thứ tự/page count/thumbnail được cập nhật atomically trong Room.
+- Màn chi tiết cho phép thêm tối đa 100 trang từ Photo Picker, xoay 90°, đổi thứ tự và xóa từng trang; source ảnh vẫn bất biến, thứ tự/page count/thumbnail được cập nhật atomically trong Room.
 - Xuất PDF local theo đúng thứ tự/góc xoay hiện tại, ba preset độ phân giải, tiến trình/hủy, Save As qua Storage Access Framework và share bằng content URI có quyền đọc tạm thời.
 - OCR tiếng Việt/Anh bằng ML Kit Text Recognition Latin bundled model chạy on-device; xử lý nền theo document, lưu trạng thái/kết quả từng trang, hỗ trợ dừng/chạy lại, xem/chọn/sao chép văn bản và giữ kết quả cũ nếu lần chạy lại thất bại.
 - Library tìm kiếm theo tên tài liệu và nội dung OCR bằng Room FTS4 `unicode61`.
-- Chưa có gộp nhiều PDF, add/replace/duplicate page, crop/filter/annotation, searchable PDF và các nhóm công cụ còn lại trong feature map.
+- Chưa có gộp nhiều PDF, replace/duplicate page, crop/filter/annotation, searchable PDF và các nhóm công cụ còn lại trong feature map.
 
 ## 3. Feature map mục tiêu
 

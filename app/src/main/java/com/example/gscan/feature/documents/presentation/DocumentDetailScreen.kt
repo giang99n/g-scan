@@ -1,5 +1,9 @@
 package com.example.gscan.feature.documents.presentation
 
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +19,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -27,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -41,14 +47,20 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gscan.core.designsystem.component.GScanTopAppBar
 import com.example.gscan.core.designsystem.component.LocalFileImage
+import com.example.gscan.feature.documents.domain.model.MAX_PAGES_PER_DOCUMENT
+import com.example.gscan.feature.documents.domain.model.MAX_DOCUMENT_TITLE_LENGTH
 import com.example.gscan.feature.documents.domain.model.ScannedPage
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -65,6 +77,20 @@ fun DocumentDetailRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val latestUiState by rememberUpdatedState(uiState)
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_PAGES_PER_DOCUMENT),
+    ) { uris ->
+        if (uris.isNotEmpty()) viewModel.addPages(uris.map { it.toString() })
+    }
+    val singleImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        uri?.let { viewModel.addPages(listOf(it.toString())) }
+    }
+
+    BackHandler(enabled = uiState.isMutating) {
+        // Không rời màn hình khi file và database đang được cập nhật.
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -99,6 +125,25 @@ fun DocumentDetailRoute(
         onOcrClick = {
             uiState.details?.document?.id?.let(onOcrClick)
         },
+        onAddPagesClick = {
+            val remaining = MAX_PAGES_PER_DOCUMENT - (uiState.details?.pages?.size ?: 0)
+            if (remaining > 0) {
+                runCatching {
+                    val request = PickVisualMediaRequest(
+                        mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        maxItems = maxOf(remaining, 2),
+                        isOrderedSelection = true,
+                    )
+                    if (remaining == 1) {
+                        singleImagePickerLauncher.launch(request)
+                    } else {
+                        imagePickerLauncher.launch(request)
+                    }
+                }.onFailure { viewModel.onAddPagesPickerFailure() }
+            }
+        },
+        onCancelAddPages = viewModel::cancelAddingPages,
+        onRenameDocument = viewModel::rename,
         onRotateClick = viewModel::rotateClockwise,
         onMoveClick = viewModel::movePage,
         onDeleteClick = viewModel::deletePage,
@@ -115,12 +160,64 @@ private fun DocumentDetailScreen(
     onBackClick: () -> Unit,
     onExportClick: () -> Unit,
     onOcrClick: () -> Unit,
+    onAddPagesClick: () -> Unit,
+    onCancelAddPages: () -> Unit,
+    onRenameDocument: (String) -> Unit,
     onRotateClick: (String) -> Unit,
     onMoveClick: (String, Int) -> Unit,
     onDeleteClick: (String) -> Unit,
 ) {
     var pendingDeletePageId by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameTitle by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingDeletePage = uiState.details?.pages?.firstOrNull { it.id == pendingDeletePageId }
+
+    renameTitle?.let { title ->
+        val normalizedTitle = title.trim()
+        val canSave = normalizedTitle.isNotEmpty() && title.length <= MAX_DOCUMENT_TITLE_LENGTH
+        val submitRename = {
+            if (canSave) {
+                renameTitle = null
+                onRenameDocument(title)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { if (!uiState.isMutating) renameTitle = null },
+            title = { Text("Đổi tên tài liệu") },
+            text = {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { value ->
+                        if (value.length <= MAX_DOCUMENT_TITLE_LENGTH) renameTitle = value
+                    },
+                    enabled = !uiState.isMutating,
+                    singleLine = true,
+                    label = { Text("Tên tài liệu") },
+                    supportingText = { Text("${title.length}/$MAX_DOCUMENT_TITLE_LENGTH") },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submitRename() }),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = submitRename,
+                    enabled = canSave && !uiState.isMutating,
+                ) {
+                    Text("Lưu")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { renameTitle = null },
+                    enabled = !uiState.isMutating,
+                ) {
+                    Text("Hủy")
+                }
+            },
+        )
+    }
 
     if (pendingDeletePage != null) {
         AlertDialog(
@@ -157,7 +254,19 @@ private fun DocumentDetailScreen(
                 title = uiState.details?.document?.title ?: "Tài liệu",
                 onBackClick = onBackClick,
                 navigationEnabled = !uiState.isMutating,
+                onTitleClick = if (!uiState.isMutating) {
+                    { uiState.details?.document?.title?.let { renameTitle = it } }
+                } else {
+                    null
+                },
                 actions = {
+                    IconButton(
+                        onClick = onAddPagesClick,
+                        enabled = !uiState.isMutating &&
+                            (uiState.details?.pages?.size ?: MAX_PAGES_PER_DOCUMENT) < MAX_PAGES_PER_DOCUMENT,
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = "Thêm trang từ ảnh")
+                    }
                     IconButton(
                         onClick = onOcrClick,
                         enabled = !uiState.isMutating && uiState.details?.pages?.isNotEmpty() == true,
@@ -192,10 +301,17 @@ private fun DocumentDetailScreen(
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
 
-            uiState.details.pages.isEmpty() -> DocumentDetailMessage(
-                message = "Tài liệu này chưa có trang nào.",
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-            )
+            uiState.details.pages.isEmpty() -> if (uiState.isAddingPages) {
+                AddingPagesIndicator(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    onCancel = onCancelAddPages,
+                )
+            } else {
+                DocumentDetailMessage(
+                    message = "Tài liệu này chưa có trang nào.",
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                )
+            }
 
             else -> LazyColumn(
                 state = listState,
@@ -203,6 +319,11 @@ private fun DocumentDetailScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                if (uiState.isAddingPages) {
+                    item(key = "adding-pages") {
+                        AddingPagesIndicator(onCancel = onCancelAddPages)
+                    }
+                }
                 itemsIndexed(uiState.details.pages, key = { _, page -> page.id }) { index, page ->
                     DocumentPage(
                         page = page,
@@ -217,6 +338,28 @@ private fun DocumentDetailScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AddingPagesIndicator(
+    modifier: Modifier = Modifier,
+    onCancel: () -> Unit,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+        Text(
+            text = "Đang thêm trang…",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        TextButton(onClick = onCancel) {
+            Text("Hủy")
         }
     }
 }

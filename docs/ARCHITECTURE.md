@@ -108,9 +108,11 @@ Ingest, delete và startup reconciliation dùng chung một mutex để không t
 - Coi JPEG đã copy từ scanner là source page bất biến; mọi edit tạo metadata/operation hoặc derived file.
 - Rotate lưu metadata theo bội số 90° và decoder áp transform khi hiển thị; reorder chỉ đổi `position`, không đổi tên hay ghi đè source.
 - Reorder/delete viết lại position liên tục và cập nhật `pageCount`, thumbnail, `updatedAt` trong cùng Room transaction. Unique index được bảo vệ bằng cách tạm dịch toàn bộ position sang một khoảng không giao nhau trước khi ghi thứ tự mới.
+- Add page dùng Photo Picker rồi copy vào đúng thư mục document trước khi transaction metadata. Tên source mới lấy số lớn hơn mọi file page hiện có thay vì dựa vào `pageCount`, nên không ghi đè file còn lại sau reorder/delete. Nếu copy bị hủy/lỗi thì chỉ file mới được dọn; sau khi copy xong, commit Room chạy trong `NonCancellable` để không tạo trạng thái nửa vời. Tổng số trang được kiểm tra lại ở repository và transaction, tối đa 100. Transaction cũng đưa document legacy `DRAFT` về `READY`; nếu tài liệu đã OCR trước đó thì UI coi các page ID chưa có kết quả là chưa nhận dạng thay vì dùng trạng thái thành công cũ của WorkManager.
 - Delete page commit metadata trước rồi mới dọn file trong `NonCancellable`, nên document không bao giờ trỏ tới file đã xóa. Startup reconciliation đối chiếu cả document ID và page URI để dọn file source theo convention `page-<number>.<extension>` không còn được Room tham chiếu nếu cleanup trước đó bị gián đoạn; file derived/export khác trong cùng thư mục không bị xóa nhầm.
 - Không cho xóa trang duy nhất. Xóa cả document được kích hoạt từ Library sau bước xác nhận: Room xóa metadata/pages bằng foreign-key cascade trước, rồi file được cleanup trong `NonCancellable`; nếu cleanup lỗi, startup reconciliation sẽ dọn thư mục orphan ở lần mở app tiếp theo.
-- Add/replace/duplicate page chưa được triển khai.
+- Đổi tên document được chuẩn hóa và kiểm tra ở domain, sau đó cập nhật `title + updatedAt` trực tiếp trong Room; tên không đổi là no-op để không làm sai thứ tự gần đây. Flow đang được Library và màn chi tiết quan sát sẽ phản ánh tên mới mà không thay đổi source file hay OCR.
+- Replace/duplicate page chưa được triển khai.
 - Redaction phải rasterize/flatten hoặc xóa content gốc tương ứng; overlay màu đen đơn thuần không phải redaction an toàn.
 
 ## 6. PDF và OCR

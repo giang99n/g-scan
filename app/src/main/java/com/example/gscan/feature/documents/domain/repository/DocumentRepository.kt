@@ -15,5 +15,9 @@ interface DocumentRepository {
 
     suspend fun deletePage(documentId: String, pageId: String)
 
+    suspend fun addPages(documentId: String, sourceUris: List<String>)
+
+    suspend fun rename(documentId: String, title: String)
+
     suspend fun delete(id: String)
 }
