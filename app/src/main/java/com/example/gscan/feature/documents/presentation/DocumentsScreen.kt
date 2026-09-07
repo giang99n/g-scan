@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +58,7 @@ fun DocumentsRoute(
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onComposeClick: (() -> Unit)? = null,
+    onTrashClick: (() -> Unit)? = null,
     title: String = "Tài liệu",
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
@@ -81,6 +83,7 @@ fun DocumentsRoute(
         onSearchQueryChange = viewModel::updateSearchQuery,
         title = title,
         onComposeClick = onComposeClick,
+        onTrashClick = onTrashClick,
     )
 }
 
@@ -95,6 +98,7 @@ private fun DocumentsScreen(
     onSearchQueryChange: (String) -> Unit,
     title: String,
     onComposeClick: (() -> Unit)?,
+    onTrashClick: (() -> Unit)?,
 ) {
     var pendingDeleteDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingDeleteDocument = uiState.documents.firstOrNull { it.id == pendingDeleteDocumentId }
@@ -102,11 +106,11 @@ private fun DocumentsScreen(
     if (pendingDeleteDocument != null) {
         AlertDialog(
             onDismissRequest = { pendingDeleteDocumentId = null },
-            title = { Text("Xóa tài liệu?") },
+            title = { Text("Đưa vào thùng rác?") },
             text = {
                 Text(
                     "“${pendingDeleteDocument.title}” và ${pendingDeleteDocument.pageCount} trang " +
-                        "sẽ bị xóa vĩnh viễn khỏi thiết bị.",
+                        "sẽ được ẩn khỏi thư viện. Bạn có thể khôi phục sau.",
                 )
             },
             confirmButton = {
@@ -116,7 +120,7 @@ private fun DocumentsScreen(
                         onDeleteDocument(pendingDeleteDocument.id)
                     },
                 ) {
-                    Text("Xóa", color = MaterialTheme.colorScheme.error)
+                    Text("Đưa vào thùng rác", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -133,6 +137,13 @@ private fun DocumentsScreen(
             GScanTopAppBar(
                 title = title,
                 onBackClick = onBackClick,
+                actions = {
+                    if (onTrashClick != null) {
+                        IconButton(onClick = onTrashClick) {
+                            Icon(Icons.Rounded.DeleteSweep, contentDescription = "Mở thùng rác")
+                        }
+                    }
+                },
             )
         },
         floatingActionButton = {

@@ -14,6 +14,8 @@ interface DocumentRepository {
 
     fun observeDocuments(query: String = ""): Flow<List<ScannedDocument>>
 
+    fun observeTrash(): Flow<List<ScannedDocument>>
+
     fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?>
 
     suspend fun rotatePageClockwise(documentId: String, pageId: String)
@@ -27,4 +29,10 @@ interface DocumentRepository {
     suspend fun rename(documentId: String, title: String)
 
     suspend fun delete(id: String)
+
+    suspend fun restore(id: String)
+
+    suspend fun permanentlyDelete(id: String)
+
+    suspend fun emptyTrash(): Int
 }

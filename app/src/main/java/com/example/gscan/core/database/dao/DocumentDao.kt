@@ -25,17 +25,20 @@ abstract class DocumentDao {
     @Query("DELETE FROM signature_templates WHERE id = :id")
     abstract suspend fun deleteSignatureTemplate(id: String)
 
-    @Query("UPDATE pages SET signatureInk = :ink WHERE id = :pageId AND documentId = :documentId")
+    @Query(
+        "UPDATE pages SET signatureInk = :ink WHERE id = :pageId AND documentId = :documentId " +
+            "AND EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL)",
+    )
     abstract suspend fun updateSignature(documentId: String, pageId: String, ink: String): Int
 
-    @Query("UPDATE documents SET updatedAtEpochMillis = :now WHERE id = :id")
+    @Query("UPDATE documents SET updatedAtEpochMillis = :now WHERE id = :id AND deletedAtEpochMillis IS NULL")
     abstract suspend fun touchDocument(id: String, now: Long)
 
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
             "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk " +
-            "FROM documents ORDER BY updatedAtEpochMillis DESC",
+            "FROM documents WHERE deletedAtEpochMillis IS NULL ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeAllSummaries(): Flow<List<DocumentSummary>>
 
@@ -43,8 +46,8 @@ abstract class DocumentDao {
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
             "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk FROM documents " +
-            "WHERE title LIKE :titlePattern ESCAPE '\\' OR id IN " +
-            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery) " +
+            "WHERE deletedAtEpochMillis IS NULL AND (title LIKE :titlePattern ESCAPE '\\' OR id IN " +
+            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery)) " +
             "ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeSearchSummaries(
@@ -52,12 +55,20 @@ abstract class DocumentDao {
         ftsQuery: String,
     ): Flow<List<DocumentSummary>>
 
+    @Query(
+        "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
+            "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk " +
+            "FROM documents WHERE deletedAtEpochMillis IS NOT NULL ORDER BY deletedAtEpochMillis DESC",
+    )
+    abstract fun observeTrashSummaries(): Flow<List<DocumentSummary>>
+
     @Transaction
-    @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
+    @Query("SELECT * FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
     abstract fun observeWithPages(documentId: String): Flow<DocumentWithPages?>
 
     @Transaction
-    @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
+    @Query("SELECT * FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
     abstract suspend fun getWithPages(documentId: String): DocumentWithPages?
 
     @Query("SELECT id FROM documents")
@@ -69,15 +80,37 @@ abstract class DocumentDao {
     @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId)")
     abstract suspend fun exists(documentId: String): Boolean
 
-    @Query("SELECT title FROM documents WHERE id = :documentId LIMIT 1")
+    @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL)")
+    abstract suspend fun existsActive(documentId: String): Boolean
+
+    @Query("SELECT title FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
     abstract suspend fun getDocumentTitle(documentId: String): String?
 
     @Query("DELETE FROM documents WHERE id = :id")
     abstract suspend fun deleteById(id: String): Int
 
+    @Query("SELECT id FROM documents WHERE deletedAtEpochMillis IS NOT NULL")
+    abstract suspend fun getTrashedIds(): List<String>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NOT NULL)")
+    abstract suspend fun isTrashed(documentId: String): Boolean
+
+    @Query(
+        "UPDATE documents SET deletedAtEpochMillis = :deletedAtEpochMillis, " +
+            "updatedAtEpochMillis = :deletedAtEpochMillis " +
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NULL",
+    )
+    abstract suspend fun moveToTrash(documentId: String, deletedAtEpochMillis: Long): Int
+
+    @Query(
+        "UPDATE documents SET deletedAtEpochMillis = NULL, updatedAtEpochMillis = :updatedAtEpochMillis " +
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NOT NULL",
+    )
+    abstract suspend fun restoreFromTrash(documentId: String, updatedAtEpochMillis: Long): Int
+
     @Query(
         "UPDATE documents SET title = :title, updatedAtEpochMillis = :updatedAtEpochMillis " +
-            "WHERE id = :documentId",
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NULL",
     )
     abstract suspend fun renameDocument(
         documentId: String,
@@ -94,14 +127,18 @@ abstract class DocumentDao {
     @Query(
         "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
             "INNER JOIN pages ON pages.id = ocr_results.pageId " +
-            "WHERE ocr_results.documentId = :documentId ORDER BY pages.position",
+            "INNER JOIN documents ON documents.id = ocr_results.documentId " +
+            "WHERE ocr_results.documentId = :documentId " +
+            "AND documents.deletedAtEpochMillis IS NULL ORDER BY pages.position",
     )
     abstract fun observeOcrResults(documentId: String): Flow<List<OcrResultWithPosition>>
 
     @Query(
         "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
             "INNER JOIN pages ON pages.id = ocr_results.pageId " +
-            "WHERE ocr_results.documentId = :documentId ORDER BY pages.position",
+            "INNER JOIN documents ON documents.id = ocr_results.documentId " +
+            "WHERE ocr_results.documentId = :documentId " +
+            "AND documents.deletedAtEpochMillis IS NULL ORDER BY pages.position",
     )
     abstract suspend fun getOcrResults(documentId: String): List<OcrResultWithPosition>
 
@@ -282,19 +319,30 @@ abstract class DocumentDao {
 
     @Transaction
     open suspend fun deleteDocument(documentId: String): Int {
+        if (!isTrashed(documentId)) return 0
         deleteOcrSearchByDocumentId(documentId)
         return deleteById(documentId)
     }
 
     @Transaction
+    open suspend fun deleteAllTrashedDocuments(): List<String> {
+        val ids = getTrashedIds()
+        ids.forEach { documentId ->
+            deleteOcrSearchByDocumentId(documentId)
+            deleteById(documentId)
+        }
+        return ids
+    }
+
+    @Transaction
     open suspend fun prepareOcr(documentId: String, results: List<OcrResultEntity>) {
-        if (!exists(documentId)) throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
+        if (!existsActive(documentId)) throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
         results.forEach { upsertOcrResult(it) }
     }
 
     @Transaction
     open suspend fun saveOcrResult(result: OcrResultEntity) {
-        if (!exists(result.documentId)) {
+        if (!existsActive(result.documentId)) {
             throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
         }
         upsertOcrResult(result)
@@ -311,7 +359,7 @@ abstract class DocumentDao {
     }
 
     private suspend fun requireDocumentPages(documentId: String): List<PageEntity> {
-        if (!exists(documentId)) {
+        if (!existsActive(documentId)) {
             throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
         }
         return getPages(documentId)

@@ -79,11 +79,11 @@ class DocumentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 deleteDocument(documentId)
-                _effects.send(DocumentsEffect.ShowMessage("Đã xóa tài liệu."))
+                _effects.send(DocumentsEffect.ShowMessage("Đã chuyển tài liệu vào thùng rác."))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                _effects.send(DocumentsEffect.ShowMessage("Không thể xóa tài liệu. Hãy thử lại."))
+                _effects.send(DocumentsEffect.ShowMessage("Không thể chuyển tài liệu vào thùng rác. Hãy thử lại."))
             } finally {
                 _uiState.update { it.copy(deletingDocumentId = null) }
             }

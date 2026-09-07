@@ -9,6 +9,7 @@ data class ScannedDocument(
     val status: DocumentStatus,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    val deletedAtEpochMillis: Long? = null,
     val thumbnailSignatureInk: String = "[]",
 )
 

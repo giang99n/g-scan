@@ -104,6 +104,16 @@ class OfflineDocumentRepository @Inject constructor(
     override fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?> =
         documentDao.observeWithPages(documentId).map { it?.toDomain() }
 
+    override fun observeTrash(): Flow<List<ScannedDocument>> =
+        documentDao.observeTrashSummaries().map { rows ->
+            rows.map { summary ->
+                summary.document.toDomain(
+                    summary.thumbnailRotationDegrees,
+                    summary.thumbnailSignatureInk,
+                )
+            }
+        }
+
     override suspend fun rotatePageClockwise(documentId: String, pageId: String) {
         mutatePages {
             documentDao.rotatePageClockwise(documentId, pageId, System.currentTimeMillis())
@@ -209,15 +219,44 @@ class OfflineDocumentRepository @Inject constructor(
     }
 
     override suspend fun delete(id: String) {
+        // Xóa mềm không đụng tới file nên không chờ các tác vụ dài như OCR/export.
+        // Các mutation page/OCR đều kiểm tra document còn active trước khi commit.
+        val updatedRows = withContext(NonCancellable) {
+            documentDao.moveToTrash(id, System.currentTimeMillis())
+        }
+        if (updatedRows != 1) {
+            throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+        }
+    }
+
+    override suspend fun restore(id: String) {
         operationLock.mutex.withLock {
-            val deletedRows = documentDao.deleteDocument(id)
-            if (deletedRows > 0) {
-                withContext(NonCancellable) {
-                    // Room là source of truth. Nếu cleanup lỗi, startup reconciliation
-                    // sẽ nhận ra thư mục orphan và thử dọn lại an toàn.
-                    runCatching { storage.deleteDocument(id) }
-                }
+            val updatedRows = documentDao.restoreFromTrash(id, System.currentTimeMillis())
+            if (updatedRows != 1) {
+                throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
             }
+        }
+    }
+
+    override suspend fun permanentlyDelete(id: String) {
+        operationLock.mutex.withLock {
+            val deletedRows = withContext(NonCancellable) { documentDao.deleteDocument(id) }
+            if (deletedRows != 1) {
+                throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+            }
+            withContext(NonCancellable) {
+                // Room là source of truth. Nếu cleanup lỗi, startup reconciliation
+                // sẽ nhận ra thư mục orphan và thử dọn lại an toàn.
+                runCatching { storage.deleteDocument(id) }
+            }
+        }
+    }
+
+    override suspend fun emptyTrash(): Int = operationLock.mutex.withLock {
+        withContext(NonCancellable) {
+            val deletedIds = documentDao.deleteAllTrashedDocuments()
+            deletedIds.forEach { id -> runCatching { storage.deleteDocument(id) } }
+            deletedIds.size
         }
     }
 

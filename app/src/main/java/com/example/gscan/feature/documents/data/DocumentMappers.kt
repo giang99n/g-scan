@@ -17,6 +17,7 @@ internal fun DocumentEntity.toDomain(thumbnailRotationDegrees: Int = 0, thumbnai
     status = runCatching { DocumentStatus.valueOf(status) }.getOrDefault(DocumentStatus.FAILED),
     createdAtEpochMillis = createdAtEpochMillis,
     updatedAtEpochMillis = updatedAtEpochMillis,
+    deletedAtEpochMillis = deletedAtEpochMillis,
 )
 
 internal fun DocumentWithPages.toDomain(): ScannedDocumentDetails {

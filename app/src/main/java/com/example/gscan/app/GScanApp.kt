@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.gscan.feature.backup.presentation.BackupScreen
 import com.example.gscan.feature.documents.presentation.DocumentsRoute
+import com.example.gscan.feature.documents.presentation.TrashRoute
 import com.example.gscan.feature.documents.presentation.ComposeDocumentScreen
 import com.example.gscan.feature.documents.presentation.DOCUMENT_ID_ARGUMENT
 import com.example.gscan.feature.documents.presentation.DocumentDetailRoute
@@ -24,6 +25,7 @@ private object Route {
     const val HOME = "home"
     const val DOCUMENTS = "documents"
     const val COMPOSE_DOCUMENT = "compose_document"
+    const val TRASH = "trash"
     const val DOCUMENT_DETAIL = "documents/{$DOCUMENT_ID_ARGUMENT}"
     const val SCANNER = "scanner"
     const val IMPORT = "import"
@@ -74,12 +76,16 @@ fun GScanApp(
         composable(Route.DOCUMENTS) {
             DocumentsRoute(
                 onComposeClick = { navController.navigate(Route.COMPOSE_DOCUMENT) },
+                onTrashClick = { navController.navigate(Route.TRASH) },
                 onBackClick = navController::navigateUp,
                 onScanClick = { navController.navigate(Route.SCANNER) },
                 onDocumentClick = { documentId ->
                     navController.navigate("documents/$documentId")
                 },
             )
+        }
+        composable(Route.TRASH) {
+            TrashRoute(onBackClick = navController::navigateUp)
         }
         composable(Route.COMPOSE_DOCUMENT) {
             ComposeDocumentScreen(

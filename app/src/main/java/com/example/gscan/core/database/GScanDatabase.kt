@@ -19,7 +19,7 @@ import com.example.gscan.core.database.model.PageEntity
         com.example.gscan.core.database.model.SignatureTemplateEntity::class,
         com.example.gscan.core.database.model.BarcodeHistoryEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class GScanDatabase : RoomDatabase() {
@@ -27,6 +27,12 @@ abstract class GScanDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 
     companion object {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `documents` ADD COLUMN `deletedAtEpochMillis` INTEGER")
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `barcode_history` (`id` TEXT NOT NULL, `content` TEXT NOT NULL, `format` TEXT NOT NULL, `type` TEXT NOT NULL, `scannedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))")

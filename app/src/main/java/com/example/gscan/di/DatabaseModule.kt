@@ -23,6 +23,7 @@ object DatabaseModule {
                 GScanDatabase.MIGRATION_2_3,
                 GScanDatabase.MIGRATION_3_4,
                 GScanDatabase.MIGRATION_4_5,
+                GScanDatabase.MIGRATION_5_6,
             )
             .build()
 
