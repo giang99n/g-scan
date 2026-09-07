@@ -91,6 +91,19 @@ class DocumentDetailViewModel @Inject constructor(
         _effects.send(DocumentDetailEffect.ShowMessage("Đã xóa trang."))
     }
 
+    fun duplicatePage(pageId: String) {
+        val targetPosition = _uiState.value.details?.pages
+            ?.indexOfFirst { it.id == pageId }
+            ?.takeIf { it >= 0 }
+            ?.plus(1)
+            ?: return
+        mutate {
+            val duplicatedPageId = managePages.duplicate(documentId, pageId)
+            _effects.send(DocumentDetailEffect.PageMoved(duplicatedPageId, targetPosition))
+            _effects.send(DocumentDetailEffect.ShowMessage("Đã nhân bản trang."))
+        }
+    }
+
     fun addPages(sourceUris: List<String>) = mutate(isAddingPages = true) {
         managePages.add(documentId, sourceUris)
         _effects.send(
@@ -150,6 +163,7 @@ private fun PageEditException.toUserMessage(): String = when (reason) {
     PageEditFailure.LAST_PAGE -> "Không thể xóa trang duy nhất của tài liệu."
     PageEditFailure.INVALID_POSITION -> "Vị trí trang không hợp lệ."
     PageEditFailure.NO_PAGES -> "Bạn chưa chọn ảnh nào."
+    PageEditFailure.EMPTY_DOCUMENT -> "Tài liệu chưa có trang để nhân bản."
     PageEditFailure.TOO_MANY_PAGES -> "Mỗi tài liệu chỉ hỗ trợ tối đa 100 trang."
     PageEditFailure.SOURCE_UNAVAILABLE -> "Không thể đọc một hoặc nhiều ảnh đã chọn."
     PageEditFailure.STORAGE_FULL -> "Thiết bị không còn đủ dung lượng trống."

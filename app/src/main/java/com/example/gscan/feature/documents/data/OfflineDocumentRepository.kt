@@ -143,6 +143,67 @@ class OfflineDocumentRepository @Inject constructor(
         }
     }
 
+    override suspend fun duplicatePage(documentId: String, pageId: String): String =
+        operationLock.mutex.withLock {
+            val currentPages = documentDao.getWithPages(documentId)?.pages
+                ?: throw PageEditException(PageEditFailure.DOCUMENT_NOT_FOUND)
+            if (currentPages.size >= MAX_PAGES_PER_DOCUMENT) {
+                throw PageEditException(PageEditFailure.TOO_MANY_PAGES)
+            }
+            val sourcePage = currentPages.firstOrNull { it.id == pageId }
+                ?: throw PageEditException(PageEditFailure.PAGE_NOT_FOUND)
+            val storedPage = try {
+                storage.appendDocumentPages(documentId, listOf(sourcePage.sourceUri)).single()
+            } catch (error: DocumentStorageException) {
+                throw error.toPageEditException()
+            }
+            val duplicatedPageId = UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            try {
+                withContext(NonCancellable) {
+                    documentDao.duplicatePage(
+                        documentId = documentId,
+                        sourcePageId = pageId,
+                        duplicatedPage = PageEntity(
+                            id = duplicatedPageId,
+                            documentId = documentId,
+                            position = currentPages.size,
+                            sourceUri = storedPage.sourceUri,
+                            width = storedPage.width,
+                            height = storedPage.height,
+                            rotationDegrees = sourcePage.rotationDegrees,
+                            createdAtEpochMillis = now,
+                            signatureInk = sourcePage.signatureInk,
+                        ),
+                        maxPageCount = MAX_PAGES_PER_DOCUMENT,
+                        updatedAtEpochMillis = now,
+                    )
+                }
+                duplicatedPageId
+            } catch (error: Exception) {
+                val committed = withContext(NonCancellable) {
+                    runCatching {
+                        documentDao.pageExists(documentId, duplicatedPageId)
+                    }.getOrNull().also { exists ->
+                        if (exists == false) {
+                            runCatching {
+                                storage.deleteStoredPages(documentId, listOf(storedPage.sourceUri))
+                            }
+                        }
+                    }
+                }
+                if (committed == true) {
+                    duplicatedPageId
+                } else {
+                    when (error) {
+                        is PageMutationException -> throw error.toDomainException()
+                        is CancellationException -> throw error
+                        else -> throw PageEditException(PageEditFailure.UNKNOWN, error)
+                    }
+                }
+            }
+        }
+
     override suspend fun addPages(documentId: String, sourceUris: List<String>) {
         if (sourceUris.isEmpty()) throw PageEditException(PageEditFailure.NO_PAGES)
         operationLock.mutex.withLock {

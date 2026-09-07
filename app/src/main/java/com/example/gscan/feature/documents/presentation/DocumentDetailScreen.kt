@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -149,6 +150,7 @@ fun DocumentDetailRoute(
         onRotateClick = viewModel::rotateClockwise,
         onMoveClick = viewModel::movePage,
         onDeleteClick = viewModel::deletePage,
+        onDuplicateClick = viewModel::duplicatePage,
     )
 }
 
@@ -169,6 +171,7 @@ private fun DocumentDetailScreen(
     onRotateClick: (String) -> Unit,
     onMoveClick: (String, Int) -> Unit,
     onDeleteClick: (String) -> Unit,
+    onDuplicateClick: (String) -> Unit,
 ) {
     var pendingDeletePageId by rememberSaveable { mutableStateOf<String?>(null) }
     var renameTitle by rememberSaveable { mutableStateOf<String?>(null) }
@@ -336,10 +339,12 @@ private fun DocumentDetailScreen(
                         canMoveUp = index > 0,
                         canMoveDown = index < uiState.details.pages.lastIndex,
                         canDelete = uiState.details.pages.size > 1,
+                        canDuplicate = uiState.details.pages.size < MAX_PAGES_PER_DOCUMENT,
                         controlsEnabled = !uiState.isMutating,
                         onMoveUp = { onMoveClick(page.id, index - 1) },
                         onMoveDown = { onMoveClick(page.id, index + 1) },
                         onRotate = { onRotateClick(page.id) },
+                        onDuplicate = { onDuplicateClick(page.id) },
                         onDelete = { pendingDeletePageId = page.id },
                     )
                 }
@@ -376,10 +381,12 @@ private fun DocumentPage(
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     canDelete: Boolean,
+    canDuplicate: Boolean,
     controlsEnabled: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onRotate: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val swapsDimensions = page.rotationDegrees % 180 != 0
@@ -413,6 +420,9 @@ private fun DocumentPage(
             }
             IconButton(onClick = onRotate, enabled = controlsEnabled) {
                 Icon(Icons.AutoMirrored.Rounded.RotateRight, contentDescription = "Xoay trang sang phải")
+            }
+            IconButton(onClick = onDuplicate, enabled = controlsEnabled && canDuplicate) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = "Nhân bản trang")
             }
             IconButton(onClick = onDelete, enabled = controlsEnabled && canDelete) {
                 Icon(Icons.Rounded.Delete, contentDescription = "Xóa trang")

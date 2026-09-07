@@ -3,7 +3,10 @@ package com.example.gscan.feature.documents.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
+import com.example.gscan.feature.documents.domain.model.PageEditException
+import com.example.gscan.feature.documents.domain.model.PageEditFailure
 import com.example.gscan.feature.documents.domain.usecase.DeleteDocumentUseCase
+import com.example.gscan.feature.documents.domain.usecase.DuplicateDocumentUseCase
 import com.example.gscan.feature.documents.domain.usecase.ObserveDocumentsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -22,6 +25,7 @@ data class DocumentsUiState(
     val documents: List<ScannedDocument> = emptyList(),
     val searchQuery: String = "",
     val deletingDocumentId: String? = null,
+    val duplicatingDocumentId: String? = null,
     val errorMessage: String? = null,
 )
 
@@ -33,6 +37,7 @@ sealed interface DocumentsEffect {
 class DocumentsViewModel @Inject constructor(
     private val observeDocuments: ObserveDocumentsUseCase,
     private val deleteDocument: DeleteDocumentUseCase,
+    private val duplicateDocument: DuplicateDocumentUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DocumentsUiState())
     private val _effects = Channel<DocumentsEffect>(Channel.BUFFERED)
@@ -73,7 +78,9 @@ class DocumentsViewModel @Inject constructor(
 
     fun delete(documentId: String) {
         val state = _uiState.value
-        if (state.deletingDocumentId != null || state.documents.none { it.id == documentId }) return
+        if (state.deletingDocumentId != null || state.duplicatingDocumentId != null ||
+            state.documents.none { it.id == documentId }
+        ) return
 
         _uiState.update { it.copy(deletingDocumentId = documentId) }
         viewModelScope.launch {
@@ -89,4 +96,36 @@ class DocumentsViewModel @Inject constructor(
             }
         }
     }
+
+    fun duplicate(documentId: String) {
+        val state = _uiState.value
+        if (state.deletingDocumentId != null || state.duplicatingDocumentId != null ||
+            state.documents.none { it.id == documentId && it.pageCount > 0 }
+        ) return
+
+        _uiState.update { it.copy(duplicatingDocumentId = documentId) }
+        viewModelScope.launch {
+            try {
+                duplicateDocument(documentId)
+                _effects.send(DocumentsEffect.ShowMessage("Đã nhân bản tài liệu."))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: PageEditException) {
+                _effects.send(DocumentsEffect.ShowMessage(error.toDuplicateDocumentMessage()))
+            } catch (_: Exception) {
+                _effects.send(DocumentsEffect.ShowMessage("Không thể nhân bản tài liệu. Hãy thử lại."))
+            } finally {
+                _uiState.update { it.copy(duplicatingDocumentId = null) }
+            }
+        }
+    }
+}
+
+private fun PageEditException.toDuplicateDocumentMessage(): String = when (reason) {
+    PageEditFailure.DOCUMENT_NOT_FOUND -> "Tài liệu không còn tồn tại."
+    PageEditFailure.EMPTY_DOCUMENT -> "Không thể nhân bản tài liệu chưa có trang."
+    PageEditFailure.SOURCE_UNAVAILABLE -> "Không thể đọc file của tài liệu."
+    PageEditFailure.STORAGE_FULL -> "Thiết bị không còn đủ dung lượng trống."
+    PageEditFailure.INVALID_IMAGE -> "Tài liệu chứa file ảnh không hợp lệ."
+    else -> "Không thể nhân bản tài liệu. Hãy thử lại."
 }

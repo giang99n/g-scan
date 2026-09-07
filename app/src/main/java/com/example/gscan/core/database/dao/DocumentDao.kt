@@ -157,6 +157,9 @@ abstract class DocumentDao {
     @Query("SELECT * FROM pages WHERE documentId = :documentId ORDER BY position")
     abstract suspend fun getPages(documentId: String): List<PageEntity>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM pages WHERE id = :pageId AND documentId = :documentId)")
+    abstract suspend fun pageExists(documentId: String, pageId: String): Boolean
+
     @Query("UPDATE pages SET rotationDegrees = :rotationDegrees WHERE id = :pageId AND documentId = :documentId")
     abstract suspend fun updatePageRotation(
         documentId: String,
@@ -313,6 +316,39 @@ abstract class DocumentDao {
             pageCount = existingPages.size + pages.size,
             thumbnailUri = existingPages.firstOrNull()?.sourceUri ?: pages.first().sourceUri,
             status = readyStatus,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
+    }
+
+    @Transaction
+    open suspend fun duplicatePage(
+        documentId: String,
+        sourcePageId: String,
+        duplicatedPage: PageEntity,
+        maxPageCount: Int,
+        updatedAtEpochMillis: Long,
+    ) {
+        val existingPages = requireDocumentPages(documentId)
+        val sourceIndex = existingPages.indexOfFirst { it.id == sourcePageId }
+        if (sourceIndex < 0) {
+            throw PageMutationException(PageMutationFailure.PAGE_NOT_FOUND)
+        }
+        if (existingPages.size >= maxPageCount) {
+            throw PageMutationException(PageMutationFailure.TOO_MANY_PAGES)
+        }
+        if (duplicatedPage.documentId != documentId || duplicatedPage.position != existingPages.size) {
+            throw PageMutationException(PageMutationFailure.INVALID_POSITION)
+        }
+
+        insertPages(listOf(duplicatedPage))
+        val reorderedPages = existingPages.toMutableList().apply {
+            add(sourceIndex + 1, duplicatedPage)
+        }
+        rewritePagePositions(documentId, reorderedPages)
+        updateDocumentPageSummary(
+            documentId = documentId,
+            pageCount = reorderedPages.size,
+            thumbnailUri = reorderedPages.first().sourceUri,
             updatedAtEpochMillis = updatedAtEpochMillis,
         )
     }

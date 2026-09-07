@@ -41,6 +41,7 @@ enum class PageEditFailure {
     LAST_PAGE,
     INVALID_POSITION,
     NO_PAGES,
+    EMPTY_DOCUMENT,
     TOO_MANY_PAGES,
     SOURCE_UNAVAILABLE,
     STORAGE_FULL,

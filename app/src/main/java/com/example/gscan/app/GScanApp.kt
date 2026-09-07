@@ -77,6 +77,7 @@ fun GScanApp(
             DocumentsRoute(
                 onComposeClick = { navController.navigate(Route.COMPOSE_DOCUMENT) },
                 onTrashClick = { navController.navigate(Route.TRASH) },
+                allowDocumentDuplication = true,
                 onBackClick = navController::navigateUp,
                 onScanClick = { navController.navigate(Route.SCANNER) },
                 onDocumentClick = { documentId ->

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Search
@@ -59,6 +60,7 @@ fun DocumentsRoute(
     onDocumentClick: (String) -> Unit,
     onComposeClick: (() -> Unit)? = null,
     onTrashClick: (() -> Unit)? = null,
+    allowDocumentDuplication: Boolean = false,
     title: String = "Tài liệu",
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
@@ -80,10 +82,12 @@ fun DocumentsRoute(
         onScanClick = onScanClick,
         onDocumentClick = onDocumentClick,
         onDeleteDocument = viewModel::delete,
+        onDuplicateDocument = viewModel::duplicate,
         onSearchQueryChange = viewModel::updateSearchQuery,
         title = title,
         onComposeClick = onComposeClick,
         onTrashClick = onTrashClick,
+        allowDocumentDuplication = allowDocumentDuplication,
     )
 }
 
@@ -95,10 +99,12 @@ private fun DocumentsScreen(
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onDeleteDocument: (String) -> Unit,
+    onDuplicateDocument: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     title: String,
     onComposeClick: (() -> Unit)?,
     onTrashClick: (() -> Unit)?,
+    allowDocumentDuplication: Boolean,
 ) {
     var pendingDeleteDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingDeleteDocument = uiState.documents.firstOrNull { it.id == pendingDeleteDocumentId }
@@ -192,11 +198,17 @@ private fun DocumentsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(uiState.documents, key = { it.id }) { document ->
+                        val isProcessing = uiState.deletingDocumentId == document.id ||
+                            uiState.duplicatingDocumentId == document.id
+                        val actionsEnabled = uiState.deletingDocumentId == null &&
+                            uiState.duplicatingDocumentId == null
                         DocumentCard(
                             document = document,
-                            isDeleting = uiState.deletingDocumentId == document.id,
-                            deleteEnabled = uiState.deletingDocumentId == null,
+                            isProcessing = isProcessing,
+                            actionsEnabled = actionsEnabled,
+                            duplicateEnabled = allowDocumentDuplication && document.pageCount > 0,
                             onClick = { onDocumentClick(document.id) },
+                            onDuplicateClick = { onDuplicateDocument(document.id) },
                             onDeleteClick = { pendingDeleteDocumentId = document.id },
                         )
                     }
@@ -269,15 +281,17 @@ private fun ErrorDocuments(
 @Composable
 private fun DocumentCard(
     document: ScannedDocument,
-    isDeleting: Boolean,
-    deleteEnabled: Boolean,
+    isProcessing: Boolean,
+    actionsEnabled: Boolean,
+    duplicateEnabled: Boolean,
     onClick: () -> Unit,
+    onDuplicateClick: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !isDeleting, onClick = onClick),
+            .clickable(enabled = !isProcessing, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -298,10 +312,18 @@ private fun DocumentCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            if (isDeleting) {
+            if (isProcessing) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
-                IconButton(onClick = onDeleteClick, enabled = deleteEnabled) {
+                if (duplicateEnabled) {
+                    IconButton(onClick = onDuplicateClick, enabled = actionsEnabled) {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = "Nhân bản ${document.title}",
+                        )
+                    }
+                }
+                IconButton(onClick = onDeleteClick, enabled = actionsEnabled) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
                         contentDescription = "Xóa ${document.title}",
