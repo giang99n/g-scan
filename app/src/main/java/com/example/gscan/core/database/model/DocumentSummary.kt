@@ -5,4 +5,5 @@ import androidx.room.Embedded
 data class DocumentSummary(
     @Embedded val document: DocumentEntity,
     val thumbnailRotationDegrees: Int,
+    val thumbnailSignatureInk: String,
 )

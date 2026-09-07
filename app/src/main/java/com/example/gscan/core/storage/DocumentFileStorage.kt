@@ -60,6 +60,7 @@ class DocumentFileStorage @Inject constructor(
     suspend fun copyDocumentPages(
         documentId: String,
         sourceUris: List<String>,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): List<StoredPage> = withContext(Dispatchers.IO) {
         require(sourceUris.isNotEmpty()) { "sourceUris must not be empty" }
 
@@ -88,6 +89,7 @@ class DocumentFileStorage @Inject constructor(
                     destinationDirectory = stagingDirectory,
                     position = index,
                 )
+                onProgress(index + 1, sourceUris.size)
             }
 
             currentCoroutineContext().ensureActive()

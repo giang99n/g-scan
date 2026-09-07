@@ -4,6 +4,8 @@ import com.example.gscan.core.database.dao.DocumentDao
 import com.example.gscan.core.database.dao.PageMutationException
 import com.example.gscan.core.database.dao.PageMutationFailure
 import com.example.gscan.core.database.model.PageEntity
+import com.example.gscan.core.database.model.DocumentEntity
+import com.example.gscan.feature.documents.domain.model.DocumentPageSelection
 import com.example.gscan.core.storage.DocumentFileStorage
 import com.example.gscan.core.storage.DocumentOperationLock
 import com.example.gscan.core.storage.DocumentStorageException
@@ -31,6 +33,57 @@ class OfflineDocumentRepository @Inject constructor(
     private val storage: DocumentFileStorage,
     private val operationLock: DocumentOperationLock,
 ) : DocumentRepository {
+    override suspend fun composeDocument(
+        title: String,
+        selections: List<DocumentPageSelection>,
+        onProgress: (Int, Int) -> Unit,
+    ): String = operationLock.mutex.withLock {
+        val sources = selections.flatMap { selection ->
+            val pages = documentDao.getWithPages(selection.documentId)?.pages
+                ?: throw IllegalArgumentException("Tài liệu nguồn đã bị xóa. Hãy chọn lại.")
+            val byId = pages.associateBy { it.id }
+            selection.pageIds.map { pageId ->
+                byId[pageId] ?: throw IllegalArgumentException("Trang nguồn đã thay đổi. Hãy chọn lại.")
+            }
+        }
+        require(sources.size in 1..MAX_PAGES_PER_DOCUMENT) { "Hãy chọn từ 1 đến 100 trang." }
+        val id = UUID.randomUUID().toString()
+        try {
+            onProgress(0, sources.size)
+            val copied = storage.copyDocumentPages(id, sources.map { it.sourceUri }, onProgress)
+            val now = System.currentTimeMillis()
+            documentDao.insertDocumentWithPages(
+                DocumentEntity(
+                    id = id,
+                    title = title,
+                    pageCount = copied.size,
+                    thumbnailUri = copied.first().sourceUri,
+                    status = DocumentStatus.READY.name,
+                    createdAtEpochMillis = now,
+                    updatedAtEpochMillis = now,
+                ),
+                copied.mapIndexed { index, page ->
+                    sources[index].copy(
+                        id = UUID.randomUUID().toString(), documentId = id, position = index,
+                        sourceUri = page.sourceUri, createdAtEpochMillis = now,
+                    )
+                },
+            )
+            id
+        } catch (error: Exception) {
+            // Cancellation can arrive after Room commits: only remove proven uncommitted files.
+            val committed = withContext(NonCancellable) {
+                runCatching { documentDao.exists(id) }.getOrNull().also { exists ->
+                    if (exists == false) runCatching { storage.deleteDocument(id) }
+                }
+            }
+            if (committed == true) id else {
+                if (error is DocumentStorageException) throw error.toPageEditException()
+                throw error
+            }
+        }
+    }
+
     override fun observeDocuments(query: String): Flow<List<ScannedDocument>> {
         val normalizedQuery = query.trim()
         val summaries = if (normalizedQuery.isEmpty()) {
@@ -43,7 +96,7 @@ class OfflineDocumentRepository @Inject constructor(
         }
         return summaries.map { rows ->
             rows.map { summary ->
-                summary.document.toDomain(summary.thumbnailRotationDegrees)
+                summary.document.toDomain(summary.thumbnailRotationDegrees, summary.thumbnailSignatureInk)
             }
         }
     }

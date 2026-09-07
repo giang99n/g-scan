@@ -18,6 +18,23 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
     @Binds
+    abstract fun bindBarcodeScanner(
+        implementation: com.example.gscan.feature.tools.data.GoogleBarcodeScanner,
+    ): com.example.gscan.feature.tools.domain.BarcodeScanner
+
+    @Binds
+    @Singleton
+    abstract fun bindBarcodeHistoryRepository(
+        implementation: com.example.gscan.feature.tools.data.OfflineBarcodeHistoryRepository,
+    ): com.example.gscan.feature.tools.domain.BarcodeHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSignatureRepository(
+        implementation: com.example.gscan.feature.editor.data.OfflineSignatureRepository,
+    ): com.example.gscan.feature.editor.domain.SignatureRepository
+
+    @Binds
     @Singleton
     abstract fun bindDocumentRepository(
         implementation: OfflineDocumentRepository,

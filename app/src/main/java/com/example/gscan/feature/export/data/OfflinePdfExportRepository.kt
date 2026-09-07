@@ -180,11 +180,15 @@ class OfflinePdfExportRepository @Inject constructor(
     ): EncodedImage {
         var bitmap = decodePage(page, preset.maxImageDimension)
         try {
-            if (bitmap.hasAlpha()) {
+            if (bitmap.hasAlpha() || page.signatureInk != "[]") {
                 val flattened = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.RGB_565)
                 Canvas(flattened).apply {
                     drawColor(Color.WHITE)
                     drawBitmap(bitmap, 0f, 0f, null)
+                    com.example.gscan.core.image.SignatureInk.draw(
+                        this, com.example.gscan.core.image.SignatureInk.decode(page.signatureInk),
+                        bitmap.width.toFloat(), bitmap.height.toFloat(), page.rotationDegrees,
+                    )
                 }
                 bitmap.recycle()
                 bitmap = flattened

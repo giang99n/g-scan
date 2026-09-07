@@ -32,14 +32,17 @@ ML Kit Document Scanner xử lý trên thiết bị nhưng UI/model/logic đư�
 - Photo Picker cho phép nhập độc lập tối đa 100 ảnh, ưu tiên ordered selection khi hệ thống hỗ trợ và không cần quyền đọc toàn bộ thư viện.
 - Storage Access Framework và Android Sharesheet cho phép nhập một PDF tối đa 100 trang từ bộ nhớ, Drive, Gmail hoặc app khác. PDF không mật khẩu được render tuần tự on-device thành source page bất biến, có tiến trình/hủy và cleanup staging khi lỗi.
 - Ảnh scan/import được kiểm tra định dạng rồi copy khỏi URI tạm vào app-owned storage trước khi lưu metadata; định dạng mã hóa và EXIF orientation của nguồn được bảo toàn khi hiển thị.
-- Room schema v3 lưu `Document + Page + OCR result/index`; ingest dùng transaction, cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
+- Room schema v5 lưu `Document + Page + OCR result/index + mẫu chữ ký + lịch sử barcode`; ingest dùng transaction, cancellation/lỗi ghi database được đối chiếu trước khi cleanup và startup reconciliation dọn orphan an toàn.
 - Library hiển thị thumbnail/số trang thật, hỗ trợ đổi tên và mở lại từng trang theo `documentId`, kể cả sau khi app khởi động lại.
 - Library cho phép xóa vĩnh viễn tài liệu sau bước xác nhận; metadata được xóa trước và file orphan được cleanup ngay hoặc qua startup reconciliation nếu thao tác file bị gián đoạn.
 - Màn chi tiết cho phép thêm tối đa 100 trang từ Photo Picker, xoay 90°, đổi thứ tự và xóa từng trang; source ảnh vẫn bất biến, thứ tự/page count/thumbnail được cập nhật atomically trong Room.
 - Xuất PDF local theo đúng thứ tự/góc xoay hiện tại, ba preset độ phân giải, tiến trình/hủy, Save As qua Storage Access Framework và share bằng content URI có quyền đọc tạm thời.
 - OCR tiếng Việt/Anh bằng ML Kit Text Recognition Latin bundled model chạy on-device; xử lý nền theo document, lưu trạng thái/kết quả từng trang, hỗ trợ dừng/chạy lại, xem/chọn/sao chép văn bản và giữ kết quả cũ nếu lần chạy lại thất bại.
 - Library tìm kiếm theo tên tài liệu và nội dung OCR bằng Room FTS4 `unicode61`.
-- Chưa có gộp nhiều PDF, replace/duplicate page, crop/filter/annotation, searchable PDF và các nhóm công cụ còn lại trong feature map.
+- QR/barcode bằng Google Code Scanner 16.1.0: camera UI qua Play services, không thêm quyền CAMERA; nhận các format SDK hỗ trợ, hiển thị raw text và phân loại URL/Wi-Fi/liên hệ/sản phẩm... Có sao chép, chia sẻ, xác nhận trước khi mở URL HTTP(S), lịch sử local và xóa từng mục/toàn bộ có xác nhận. Lỗi lưu lịch sử không làm mất kết quả hiện tại và có thử lưu lại. Cần tải module ở lần đầu; chưa đọc mã từ ảnh gallery hoặc hỗ trợ payload chỉ có dữ liệu nhị phân.
+- Chữ ký viết tay: vẽ nhiều nét, bỏ nét cuối/vẽ lại, lưu và xóa mẫu local; đặt một chữ ký trên mỗi trang, kéo di chuyển, phóng to/thu nhỏ, thay mẫu/xóa và lưu vị trí. Preview/thumbnail/PDF cùng hiển thị chữ ký; xoay và gộp/trích xuất giữ nét ký theo nội dung. PDF xuất flatten chữ ký vào ảnh; ảnh nguồn không bị sửa. Chưa có nhập ảnh chữ ký, nhiều chữ ký trên cùng trang hoặc ký số bằng chứng thư.
+- Gộp các tài liệu trong thư viện hoặc trích xuất trang thành tài liệu mới qua mục “Gộp / trích xuất trang”. Chọn thứ tự tài liệu, nhập trang/khoảng trang như `1, 3-5` (trống = toàn bộ), tối đa 100 trang; sao chép nguồn độc lập, giữ góc xoay, có tiến trình/hủy. Tài liệu mới mở được ngay để OCR/xuất PDF; chưa sao chép kết quả OCR cũ.
+- Chưa có gộp trực tiếp nhiều PDF bên ngoài mà giữ text/vector, replace/duplicate page, crop/filter/annotation, searchable PDF và các nhóm công cụ còn lại trong feature map.
 
 ## 3. Feature map mục tiêu
 

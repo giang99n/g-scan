@@ -1,10 +1,17 @@
 package com.example.gscan.feature.documents.domain.repository
 
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
+import com.example.gscan.feature.documents.domain.model.DocumentPageSelection
 import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
 import kotlinx.coroutines.flow.Flow
 
 interface DocumentRepository {
+    suspend fun composeDocument(
+        title: String,
+        selections: List<DocumentPageSelection>,
+        onProgress: (Int, Int) -> Unit,
+    ): String
+
     fun observeDocuments(query: String = ""): Flow<List<ScannedDocument>>
 
     fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?>

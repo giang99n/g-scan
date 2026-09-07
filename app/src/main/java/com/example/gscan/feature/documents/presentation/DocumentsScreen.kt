@@ -56,6 +56,7 @@ fun DocumentsRoute(
     onBackClick: () -> Unit,
     onScanClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
+    onComposeClick: (() -> Unit)? = null,
     title: String = "Tài liệu",
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
@@ -79,6 +80,7 @@ fun DocumentsRoute(
         onDeleteDocument = viewModel::delete,
         onSearchQueryChange = viewModel::updateSearchQuery,
         title = title,
+        onComposeClick = onComposeClick,
     )
 }
 
@@ -92,6 +94,7 @@ private fun DocumentsScreen(
     onDeleteDocument: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     title: String,
+    onComposeClick: (() -> Unit)?,
 ) {
     var pendingDeleteDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingDeleteDocument = uiState.documents.firstOrNull { it.id == pendingDeleteDocumentId }
@@ -139,6 +142,11 @@ private fun DocumentsScreen(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (onComposeClick != null) {
+                TextButton(onClick = onComposeClick, modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text("Gộp / trích xuất trang")
+                }
+            }
             DocumentSearchField(
                 query = uiState.searchQuery,
                 onQueryChange = onSearchQueryChange,
@@ -268,6 +276,7 @@ private fun DocumentCard(
                 uri = document.thumbnailUri,
                 title = document.title,
                 rotationDegrees = document.thumbnailRotationDegrees,
+                signatureInk = document.thumbnailSignatureInk,
             )
             Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                 Text(document.title, style = MaterialTheme.typography.titleMedium)
@@ -298,6 +307,7 @@ private fun DocumentThumbnail(
     uri: String?,
     title: String,
     rotationDegrees: Int,
+    signatureInk: String,
 ) {
     Card(
         modifier = Modifier
@@ -314,6 +324,7 @@ private fun DocumentThumbnail(
             maxDecodeSizePx = THUMBNAIL_MAX_SIZE_PX,
             contentScale = ContentScale.Crop,
             rotationDegrees = rotationDegrees,
+            signatureInk = signatureInk,
         )
     }
 }

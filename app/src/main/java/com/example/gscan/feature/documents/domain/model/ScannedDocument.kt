@@ -9,6 +9,7 @@ data class ScannedDocument(
     val status: DocumentStatus,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    val thumbnailSignatureInk: String = "[]",
 )
 
 data class ScannedDocumentDetails(
@@ -23,6 +24,7 @@ data class ScannedPage(
     val width: Int,
     val height: Int,
     val rotationDegrees: Int,
+    val signatureInk: String = "[]",
 )
 
 enum class DocumentStatus {

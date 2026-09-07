@@ -71,6 +71,7 @@ fun DocumentDetailRoute(
     onBackClick: () -> Unit,
     onExportClick: (String) -> Unit,
     onOcrClick: (String) -> Unit,
+    onSignatureClick: (String) -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -125,6 +126,7 @@ fun DocumentDetailRoute(
         onOcrClick = {
             uiState.details?.document?.id?.let(onOcrClick)
         },
+        onSignatureClick = { uiState.details?.document?.id?.let(onSignatureClick) },
         onAddPagesClick = {
             val remaining = MAX_PAGES_PER_DOCUMENT - (uiState.details?.pages?.size ?: 0)
             if (remaining > 0) {
@@ -160,6 +162,7 @@ private fun DocumentDetailScreen(
     onBackClick: () -> Unit,
     onExportClick: () -> Unit,
     onOcrClick: () -> Unit,
+    onSignatureClick: () -> Unit,
     onAddPagesClick: () -> Unit,
     onCancelAddPages: () -> Unit,
     onRenameDocument: (String) -> Unit,
@@ -260,6 +263,9 @@ private fun DocumentDetailScreen(
                     null
                 },
                 actions = {
+                    TextButton(onClick = onSignatureClick, enabled = !uiState.isMutating && uiState.details?.pages?.isNotEmpty() == true) {
+                        Text("Ký")
+                    }
                     IconButton(
                         onClick = onAddPagesClick,
                         enabled = !uiState.isMutating &&
@@ -421,6 +427,7 @@ private fun DocumentPage(
                 .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
             maxDecodeSizePx = 1200,
             rotationDegrees = page.rotationDegrees,
+            signatureInk = page.signatureInk,
         )
     }
 }

@@ -34,9 +34,10 @@ fun LocalFileImage(
     maxDecodeSizePx: Int = 1200,
     contentScale: ContentScale = ContentScale.Fit,
     rotationDegrees: Int = 0,
+    signatureInk: String = "[]",
 ) {
     val normalizedRotation = rotationDegrees.normalizedRotation()
-    val cacheKey = "$uri@$maxDecodeSizePx#$normalizedRotation"
+    val cacheKey = "$uri@$maxDecodeSizePx#$normalizedRotation#$signatureInk"
     val imageState by produceState<LocalFileImageState>(
         initialValue = LocalFileImageState.Loading,
         cacheKey,
@@ -49,7 +50,17 @@ fun LocalFileImage(
                 if (cached != null) {
                     LocalFileImageState.Success(cached)
                 } else {
-                    val decoded = uri.decodeSampledBitmap(maxDecodeSizePx, normalizedRotation)
+                    var decoded = uri.decodeSampledBitmap(maxDecodeSizePx, normalizedRotation)
+                    if (decoded != null && signatureInk != "[]") {
+                        val signed = decoded.copy(Bitmap.Config.ARGB_8888, true)
+                        decoded.recycle()
+                        decoded = signed
+                        com.example.gscan.core.image.SignatureInk.draw(
+                            android.graphics.Canvas(signed),
+                            com.example.gscan.core.image.SignatureInk.decode(signatureInk),
+                            signed.width.toFloat(), signed.height.toFloat(), normalizedRotation,
+                        )
+                    }
                     if (decoded != null) {
                         LocalBitmapCache.put(cacheKey, decoded)
                         LocalFileImageState.Success(decoded)

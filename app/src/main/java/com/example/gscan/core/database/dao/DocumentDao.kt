@@ -16,17 +16,33 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class DocumentDao {
+    @Query("SELECT * FROM signature_templates ORDER BY name, id")
+    abstract fun observeSignatureTemplates(): Flow<List<com.example.gscan.core.database.model.SignatureTemplateEntity>>
+
+    @Insert
+    abstract suspend fun insertSignatureTemplate(template: com.example.gscan.core.database.model.SignatureTemplateEntity)
+
+    @Query("DELETE FROM signature_templates WHERE id = :id")
+    abstract suspend fun deleteSignatureTemplate(id: String)
+
+    @Query("UPDATE pages SET signatureInk = :ink WHERE id = :pageId AND documentId = :documentId")
+    abstract suspend fun updateSignature(documentId: String, pageId: String, ink: String): Int
+
+    @Query("UPDATE documents SET updatedAtEpochMillis = :now WHERE id = :id")
+    abstract suspend fun touchDocument(id: String, now: Long)
+
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees FROM documents ORDER BY updatedAtEpochMillis DESC",
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk " +
+            "FROM documents ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeAllSummaries(): Flow<List<DocumentSummary>>
 
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees FROM documents " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk FROM documents " +
             "WHERE title LIKE :titlePattern ESCAPE '\\' OR id IN " +
             "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery) " +
             "ORDER BY updatedAtEpochMillis DESC",

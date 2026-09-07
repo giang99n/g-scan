@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.gscan.feature.backup.presentation.BackupScreen
 import com.example.gscan.feature.documents.presentation.DocumentsRoute
+import com.example.gscan.feature.documents.presentation.ComposeDocumentScreen
 import com.example.gscan.feature.documents.presentation.DOCUMENT_ID_ARGUMENT
 import com.example.gscan.feature.documents.presentation.DocumentDetailRoute
 import com.example.gscan.feature.editor.presentation.SignatureScreen
@@ -22,6 +23,7 @@ import com.example.gscan.feature.tools.presentation.QrBarcodeScreen
 private object Route {
     const val HOME = "home"
     const val DOCUMENTS = "documents"
+    const val COMPOSE_DOCUMENT = "compose_document"
     const val DOCUMENT_DETAIL = "documents/{$DOCUMENT_ID_ARGUMENT}"
     const val SCANNER = "scanner"
     const val IMPORT = "import"
@@ -30,6 +32,8 @@ private object Route {
     const val PDF_TOOLS = "pdf_tools"
     const val PDF_EXPORT = "documents/{$DOCUMENT_ID_ARGUMENT}/export"
     const val SIGNATURE = "signature"
+    const val SIGNATURE_DOCUMENTS = "signature_documents"
+    const val DOCUMENT_SIGNATURE = "documents/{$DOCUMENT_ID_ARGUMENT}/signature"
     const val QR_BARCODE = "qr_barcode"
     const val SECURITY = "security"
     const val BACKUP = "backup"
@@ -69,6 +73,7 @@ fun GScanApp(
         }
         composable(Route.DOCUMENTS) {
             DocumentsRoute(
+                onComposeClick = { navController.navigate(Route.COMPOSE_DOCUMENT) },
                 onBackClick = navController::navigateUp,
                 onScanClick = { navController.navigate(Route.SCANNER) },
                 onDocumentClick = { documentId ->
@@ -76,8 +81,19 @@ fun GScanApp(
                 },
             )
         }
+        composable(Route.COMPOSE_DOCUMENT) {
+            ComposeDocumentScreen(
+                onBackClick = navController::navigateUp,
+                onCreated = { id ->
+                    navController.navigate("documents/$id") {
+                        popUpTo(Route.COMPOSE_DOCUMENT) { inclusive = true }
+                    }
+                },
+            )
+        }
         composable(Route.DOCUMENT_DETAIL) {
             DocumentDetailRoute(
+                onSignatureClick = { id -> navController.navigate("documents/$id/signature") },
                 onBackClick = navController::navigateUp,
                 onExportClick = { documentId ->
                     navController.navigate("documents/$documentId/export")
@@ -137,7 +153,18 @@ fun GScanApp(
             )
         }
         composable(Route.SIGNATURE) {
-            SignatureScreen(onBackClick = navController::navigateUp)
+            SignatureScreen(onBackClick = navController::navigateUp, onChooseDocument = { navController.navigate(Route.SIGNATURE_DOCUMENTS) })
+        }
+        composable(Route.SIGNATURE_DOCUMENTS) {
+            DocumentsRoute(
+                title = "Chọn tài liệu để ký",
+                onBackClick = navController::navigateUp,
+                onScanClick = { navController.navigate(Route.SCANNER) },
+                onDocumentClick = { id -> navController.navigate("documents/$id/signature") },
+            )
+        }
+        composable(Route.DOCUMENT_SIGNATURE) {
+            SignatureScreen(onBackClick = navController::navigateUp, onChooseDocument = { navController.navigate(Route.SIGNATURE_DOCUMENTS) })
         }
         composable(Route.QR_BARCODE) {
             QrBarcodeScreen(onBackClick = navController::navigateUp)
