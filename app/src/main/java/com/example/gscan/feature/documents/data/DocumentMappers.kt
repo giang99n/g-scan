@@ -3,11 +3,17 @@ package com.example.gscan.feature.documents.data
 import com.example.gscan.core.database.model.DocumentEntity
 import com.example.gscan.core.database.model.DocumentWithPages
 import com.example.gscan.feature.documents.domain.model.DocumentStatus
+import com.example.gscan.feature.documents.domain.model.DocumentTag
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
 import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
 import com.example.gscan.feature.documents.domain.model.ScannedPage
 
-internal fun DocumentEntity.toDomain(thumbnailRotationDegrees: Int = 0, thumbnailSignatureInk: String = "[]") = ScannedDocument(
+internal fun DocumentEntity.toDomain(
+    thumbnailRotationDegrees: Int = 0,
+    thumbnailSignatureInk: String = "[]",
+    folderName: String? = null,
+    tags: List<DocumentTag> = emptyList(),
+) = ScannedDocument(
     id = id,
     title = title,
     pageCount = pageCount,
@@ -18,6 +24,10 @@ internal fun DocumentEntity.toDomain(thumbnailRotationDegrees: Int = 0, thumbnai
     createdAtEpochMillis = createdAtEpochMillis,
     updatedAtEpochMillis = updatedAtEpochMillis,
     deletedAtEpochMillis = deletedAtEpochMillis,
+    isFavorite = isFavorite,
+    folderId = folderId,
+    folderName = folderName,
+    tags = tags,
 )
 
 internal fun DocumentWithPages.toDomain(): ScannedDocumentDetails {

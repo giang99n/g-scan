@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Gscan.Splash" parent="Theme.Gscan">
+        <item name="android:windowSplashScreenBackground">@color/gscan_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/gscan_splash_icon</item>
+        <item name="android:windowSplashScreenAnimationDuration">300</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:statusBarColor">@color/gscan_launcher_background</item>
+        <item name="android:navigationBarColor">@color/gscan_launcher_background</item>
+    </style>
+</resources>

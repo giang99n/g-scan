@@ -9,6 +9,9 @@ import com.example.gscan.core.database.model.DocumentEntity
 import com.example.gscan.core.database.model.OcrResultEntity
 import com.example.gscan.core.database.model.OcrSearchEntity
 import com.example.gscan.core.database.model.PageEntity
+import com.example.gscan.core.database.model.DocumentTagEntity
+import com.example.gscan.core.database.model.FolderEntity
+import com.example.gscan.core.database.model.TagEntity
 
 @Database(
     entities = [
@@ -18,8 +21,11 @@ import com.example.gscan.core.database.model.PageEntity
         OcrSearchEntity::class,
         com.example.gscan.core.database.model.SignatureTemplateEntity::class,
         com.example.gscan.core.database.model.BarcodeHistoryEntity::class,
+        FolderEntity::class,
+        TagEntity::class,
+        DocumentTagEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class GScanDatabase : RoomDatabase() {
@@ -27,6 +33,20 @@ abstract class GScanDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 
     companion object {
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `folders` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_folders_name` ON `folders` (`name`)")
+                db.execSQL("ALTER TABLE `documents` ADD COLUMN `isFavorite` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `documents` ADD COLUMN `folderId` TEXT REFERENCES `folders`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_documents_folderId` ON `documents` (`folderId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `tags` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_tags_name` ON `tags` (`name`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `document_tags` (`documentId` TEXT NOT NULL, `tagId` TEXT NOT NULL, PRIMARY KEY(`documentId`, `tagId`), FOREIGN KEY(`documentId`) REFERENCES `documents`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(`tagId`) REFERENCES `tags`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_document_tags_tagId` ON `document_tags` (`tagId`)")
+            }
+        }
+
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `documents` ADD COLUMN `deletedAtEpochMillis` INTEGER")

@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
     private var sharedPdfUri by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_Gscan)
         super.onCreate(savedInstanceState)
         sharedPdfUri = if (savedInstanceState?.containsKey(STATE_SHARED_PDF_URI) == true) {
             savedInstanceState.getString(STATE_SHARED_PDF_URI)

@@ -6,4 +6,5 @@ data class DocumentSummary(
     @Embedded val document: DocumentEntity,
     val thumbnailRotationDegrees: Int,
     val thumbnailSignatureInk: String,
+    val folderName: String?,
 )

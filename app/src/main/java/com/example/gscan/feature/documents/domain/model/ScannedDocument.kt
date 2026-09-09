@@ -11,7 +11,15 @@ data class ScannedDocument(
     val updatedAtEpochMillis: Long,
     val deletedAtEpochMillis: Long? = null,
     val thumbnailSignatureInk: String = "[]",
+    val isFavorite: Boolean = false,
+    val folderId: String? = null,
+    val folderName: String? = null,
+    val tags: List<DocumentTag> = emptyList(),
 )
+
+data class DocumentFolder(val id: String, val name: String)
+
+data class DocumentTag(val id: String, val name: String)
 
 data class ScannedDocumentDetails(
     val document: ScannedDocument,
@@ -70,3 +78,4 @@ class DocumentEditException(
 ) : RuntimeException(reason.name, cause)
 
 const val MAX_DOCUMENT_TITLE_LENGTH = 120
+const val MAX_ORGANIZATION_NAME_LENGTH = 40
