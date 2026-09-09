@@ -12,6 +12,10 @@ import com.example.gscan.core.database.model.OcrResultEntity
 import com.example.gscan.core.database.model.OcrResultWithPosition
 import com.example.gscan.core.database.model.OcrSearchEntity
 import com.example.gscan.core.database.model.PageEntity
+import com.example.gscan.core.database.model.DocumentTagEntity
+import com.example.gscan.core.database.model.DocumentTagRow
+import com.example.gscan.core.database.model.FolderEntity
+import com.example.gscan.core.database.model.TagEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -37,7 +41,8 @@ abstract class DocumentDao {
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName " +
             "FROM documents WHERE deletedAtEpochMillis IS NULL ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeAllSummaries(): Flow<List<DocumentSummary>>
@@ -45,9 +50,12 @@ abstract class DocumentDao {
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk FROM documents " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName FROM documents " +
             "WHERE deletedAtEpochMillis IS NULL AND (title LIKE :titlePattern ESCAPE '\\' OR id IN " +
-            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery)) " +
+            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery) OR id IN " +
+            "(SELECT documentId FROM document_tags INNER JOIN tags ON tags.id = document_tags.tagId " +
+            "WHERE tags.name LIKE :titlePattern ESCAPE '\\')) " +
             "ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeSearchSummaries(
@@ -58,10 +66,98 @@ abstract class DocumentDao {
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName " +
             "FROM documents WHERE deletedAtEpochMillis IS NOT NULL ORDER BY deletedAtEpochMillis DESC",
     )
     abstract fun observeTrashSummaries(): Flow<List<DocumentSummary>>
+
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
+    abstract fun observeFolders(): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE, id")
+    abstract fun observeTags(): Flow<List<TagEntity>>
+
+    @Query(
+        "SELECT document_tags.documentId, tags.id AS tagId, tags.name AS tagName " +
+            "FROM document_tags INNER JOIN tags ON tags.id = document_tags.tagId " +
+            "ORDER BY tags.name COLLATE NOCASE, tags.id",
+    )
+    abstract fun observeDocumentTags(): Flow<List<DocumentTagRow>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertFolderRow(folder: FolderEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertTagRow(tag: TagEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
+
+    @Query("UPDATE folders SET name = :name WHERE id = :id")
+    abstract suspend fun renameFolderRow(id: String, name: String): Int
+
+    @Query("UPDATE tags SET name = :name WHERE id = :id")
+    abstract suspend fun renameTagRow(id: String, name: String): Int
+
+    @Query("SELECT COUNT(*) FROM folders WHERE name = :name COLLATE NOCASE AND id != :excludeId")
+    abstract suspend fun countFoldersNamed(name: String, excludeId: String = ""): Int
+
+    @Query("SELECT COUNT(*) FROM tags WHERE name = :name COLLATE NOCASE AND id != :excludeId")
+    abstract suspend fun countTagsNamed(name: String, excludeId: String = ""): Int
+
+    @Query("DELETE FROM folders WHERE id = :id")
+    abstract suspend fun deleteFolder(id: String): Int
+
+    @Query("DELETE FROM tags WHERE id = :id")
+    abstract suspend fun deleteTag(id: String): Int
+
+    @Query("SELECT COUNT(*) FROM documents WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun countActiveDocuments(ids: Set<String>): Int
+
+    @Query("SELECT COUNT(*) FROM folders WHERE id = :id")
+    abstract suspend fun countFolder(id: String): Int
+
+    @Query("SELECT COUNT(*) FROM tags WHERE id IN (:ids)")
+    abstract suspend fun countTags(ids: Set<String>): Int
+
+    @Query("UPDATE documents SET isFavorite = :favorite, updatedAtEpochMillis = :now WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun updateFavorite(ids: Set<String>, favorite: Boolean, now: Long): Int
+
+    @Query("UPDATE documents SET folderId = :folderId, updatedAtEpochMillis = :now WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun updateFolder(ids: Set<String>, folderId: String?, now: Long): Int
+
+    @Query("DELETE FROM document_tags WHERE documentId IN (:documentIds)")
+    abstract suspend fun deleteDocumentTags(documentIds: Set<String>)
+
+    @Query("DELETE FROM document_tags WHERE documentId IN (:documentIds) AND tagId IN (:tagIds)")
+    abstract suspend fun deleteSelectedDocumentTags(documentIds: Set<String>, tagIds: Set<String>)
+
+    @Transaction
+    open suspend fun insertFolder(folder: FolderEntity) {
+        if (countFoldersNamed(folder.name) != 0) throw OrganizationMutationException()
+        insertFolderRow(folder)
+    }
+
+    @Transaction
+    open suspend fun updateFolderName(id: String, name: String) {
+        if (countFoldersNamed(name, id) != 0 || renameFolderRow(id, name) != 1) {
+            throw OrganizationMutationException()
+        }
+    }
+
+    @Transaction
+    open suspend fun insertTag(tag: TagEntity) {
+        if (countTagsNamed(tag.name) != 0) throw OrganizationMutationException()
+        insertTagRow(tag)
+    }
+
+    @Transaction
+    open suspend fun updateTagName(id: String, name: String) {
+        if (countTagsNamed(name, id) != 0 || renameTagRow(id, name) != 1) {
+            throw OrganizationMutationException()
+        }
+    }
 
     @Transaction
     @Query("SELECT * FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
@@ -117,6 +213,43 @@ abstract class DocumentDao {
         title: String,
         updatedAtEpochMillis: Long,
     ): Int
+
+    @Transaction
+    open suspend fun setFavorite(ids: Set<String>, favorite: Boolean, now: Long) {
+        requireActiveDocuments(ids)
+        check(updateFavorite(ids, favorite, now) == ids.size)
+    }
+
+    @Transaction
+    open suspend fun moveDocuments(ids: Set<String>, folderId: String?, now: Long) {
+        requireActiveDocuments(ids)
+        if (folderId != null && countFolder(folderId) != 1) throw OrganizationMutationException()
+        check(updateFolder(ids, folderId, now) == ids.size)
+    }
+
+    @Transaction
+    open suspend fun updateDocumentTags(
+        documentIds: Set<String>,
+        addedTagIds: Set<String>,
+        removedTagIds: Set<String>,
+    ) {
+        requireActiveDocuments(documentIds)
+        check(addedTagIds.intersect(removedTagIds).isEmpty())
+        val referencedTagIds = addedTagIds + removedTagIds
+        if (referencedTagIds.isNotEmpty() && countTags(referencedTagIds) != referencedTagIds.size) {
+            throw OrganizationMutationException()
+        }
+        if (removedTagIds.isNotEmpty()) deleteSelectedDocumentTags(documentIds, removedTagIds)
+        insertDocumentTags(documentIds.flatMap { documentId ->
+            addedTagIds.map { tagId -> DocumentTagEntity(documentId, tagId) }
+        })
+    }
+
+    @Transaction
+    open suspend fun moveDocumentsToTrash(ids: Set<String>, now: Long) {
+        requireActiveDocuments(ids)
+        ids.forEach { id -> check(moveToTrash(id, now) == 1) }
+    }
 
     @Query("DELETE FROM ocr_search WHERE documentId = :documentId")
     abstract suspend fun deleteOcrSearchByDocumentId(documentId: String)
@@ -401,6 +534,12 @@ abstract class DocumentDao {
         return getPages(documentId)
     }
 
+    private suspend fun requireActiveDocuments(ids: Set<String>) {
+        if (ids.isEmpty() || countActiveDocuments(ids) != ids.size) {
+            throw OrganizationMutationException()
+        }
+    }
+
     private suspend fun rewritePagePositions(
         documentId: String,
         pages: List<PageEntity>,
@@ -421,3 +560,5 @@ enum class PageMutationFailure {
 }
 
 class PageMutationException(val failure: PageMutationFailure) : IllegalStateException(failure.name)
+
+class OrganizationMutationException : IllegalStateException("Organization data changed")

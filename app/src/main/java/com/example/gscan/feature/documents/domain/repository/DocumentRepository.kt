@@ -3,6 +3,8 @@ package com.example.gscan.feature.documents.domain.repository
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
 import com.example.gscan.feature.documents.domain.model.DocumentPageSelection
 import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
+import com.example.gscan.feature.documents.domain.model.DocumentFolder
+import com.example.gscan.feature.documents.domain.model.DocumentTag
 import kotlinx.coroutines.flow.Flow
 
 interface DocumentRepository {
@@ -13,6 +15,10 @@ interface DocumentRepository {
     ): String
 
     fun observeDocuments(query: String = ""): Flow<List<ScannedDocument>>
+
+    fun observeFolders(): Flow<List<DocumentFolder>>
+
+    fun observeTags(): Flow<List<DocumentTag>>
 
     fun observeTrash(): Flow<List<ScannedDocument>>
 
@@ -37,4 +43,28 @@ interface DocumentRepository {
     suspend fun permanentlyDelete(id: String)
 
     suspend fun emptyTrash(): Int
+
+    suspend fun setFavorite(documentIds: Set<String>, favorite: Boolean)
+
+    suspend fun moveToFolder(documentIds: Set<String>, folderId: String?)
+
+    suspend fun updateTags(
+        documentIds: Set<String>,
+        addedTagIds: Set<String>,
+        removedTagIds: Set<String>,
+    )
+
+    suspend fun moveToTrash(documentIds: Set<String>)
+
+    suspend fun createFolder(name: String)
+
+    suspend fun renameFolder(folderId: String, name: String)
+
+    suspend fun deleteFolder(folderId: String)
+
+    suspend fun createTag(name: String)
+
+    suspend fun renameTag(tagId: String, name: String)
+
+    suspend fun deleteTag(tagId: String)
 }

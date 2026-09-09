@@ -5,6 +5,8 @@ import com.example.gscan.core.database.dao.PageMutationException
 import com.example.gscan.core.database.dao.PageMutationFailure
 import com.example.gscan.core.database.model.PageEntity
 import com.example.gscan.core.database.model.DocumentEntity
+import com.example.gscan.core.database.model.FolderEntity
+import com.example.gscan.core.database.model.TagEntity
 import com.example.gscan.feature.documents.domain.model.DocumentPageSelection
 import com.example.gscan.core.storage.DocumentFileStorage
 import com.example.gscan.core.storage.DocumentOperationLock
@@ -18,6 +20,9 @@ import com.example.gscan.feature.documents.domain.model.PageEditException
 import com.example.gscan.feature.documents.domain.model.PageEditFailure
 import com.example.gscan.feature.documents.domain.model.ScannedDocument
 import com.example.gscan.feature.documents.domain.model.ScannedDocumentDetails
+import com.example.gscan.feature.documents.domain.model.DocumentFolder
+import com.example.gscan.feature.documents.domain.model.DocumentTag
+import com.example.gscan.feature.documents.domain.model.MAX_ORGANIZATION_NAME_LENGTH
 import com.example.gscan.feature.documents.domain.repository.DocumentRepository
 import java.util.UUID
 import javax.inject.Inject
@@ -25,6 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
@@ -94,12 +100,24 @@ class OfflineDocumentRepository @Inject constructor(
                 ftsQuery = normalizedQuery.toFtsQuery(),
             )
         }
-        return summaries.map { rows ->
+        return combine(summaries, documentDao.observeDocumentTags()) { rows, tagRows ->
+            val tagsByDocument = tagRows.groupBy { it.documentId }
             rows.map { summary ->
-                summary.document.toDomain(summary.thumbnailRotationDegrees, summary.thumbnailSignatureInk)
+                summary.document.toDomain(
+                    summary.thumbnailRotationDegrees,
+                    summary.thumbnailSignatureInk,
+                    summary.folderName,
+                    tagsByDocument[summary.document.id].orEmpty().map { DocumentTag(it.tagId, it.tagName) },
+                )
             }
         }
     }
+
+    override fun observeFolders(): Flow<List<DocumentFolder>> =
+        documentDao.observeFolders().map { rows -> rows.map { DocumentFolder(it.id, it.name) } }
+
+    override fun observeTags(): Flow<List<DocumentTag>> =
+        documentDao.observeTags().map { rows -> rows.map { DocumentTag(it.id, it.name) } }
 
     override fun observeDocumentDetails(documentId: String): Flow<ScannedDocumentDetails?> =
         documentDao.observeWithPages(documentId).map { it?.toDomain() }
@@ -110,6 +128,7 @@ class OfflineDocumentRepository @Inject constructor(
                 summary.document.toDomain(
                     summary.thumbnailRotationDegrees,
                     summary.thumbnailSignatureInk,
+                    summary.folderName,
                 )
             }
         }
@@ -321,6 +340,56 @@ class OfflineDocumentRepository @Inject constructor(
         }
     }
 
+    override suspend fun setFavorite(documentIds: Set<String>, favorite: Boolean) {
+        documentDao.setFavorite(documentIds, favorite, System.currentTimeMillis())
+    }
+
+    override suspend fun moveToFolder(documentIds: Set<String>, folderId: String?) {
+        documentDao.moveDocuments(documentIds, folderId, System.currentTimeMillis())
+    }
+
+    override suspend fun updateTags(
+        documentIds: Set<String>,
+        addedTagIds: Set<String>,
+        removedTagIds: Set<String>,
+    ) {
+        documentDao.updateDocumentTags(documentIds, addedTagIds, removedTagIds)
+    }
+
+    override suspend fun moveToTrash(documentIds: Set<String>) {
+        withContext(NonCancellable) {
+            documentDao.moveDocumentsToTrash(documentIds, System.currentTimeMillis())
+        }
+    }
+
+    override suspend fun createFolder(name: String) {
+        documentDao.insertFolder(FolderEntity(UUID.randomUUID().toString(), normalizeOrganizationName(name), System.currentTimeMillis()))
+    }
+
+    override suspend fun renameFolder(folderId: String, name: String) {
+        documentDao.updateFolderName(folderId, normalizeOrganizationName(name))
+    }
+
+    override suspend fun deleteFolder(folderId: String) {
+        if (documentDao.deleteFolder(folderId) != 1) {
+            throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+        }
+    }
+
+    override suspend fun createTag(name: String) {
+        documentDao.insertTag(TagEntity(UUID.randomUUID().toString(), normalizeOrganizationName(name), System.currentTimeMillis()))
+    }
+
+    override suspend fun renameTag(tagId: String, name: String) {
+        documentDao.updateTagName(tagId, normalizeOrganizationName(name))
+    }
+
+    override suspend fun deleteTag(tagId: String) {
+        if (documentDao.deleteTag(tagId) != 1) {
+            throw DocumentEditException(DocumentEditFailure.DOCUMENT_NOT_FOUND)
+        }
+    }
+
     private suspend fun mutatePages(block: suspend () -> Unit) {
         operationLock.mutex.withLock {
             try {
@@ -334,6 +403,13 @@ class OfflineDocumentRepository @Inject constructor(
             }
         }
     }
+}
+
+private fun normalizeOrganizationName(name: String): String {
+    val normalized = name.trim().filterNot(Char::isISOControl)
+    require(normalized.isNotEmpty()) { "Tên không được để trống." }
+    require(normalized.length <= MAX_ORGANIZATION_NAME_LENGTH) { "Tên tối đa 40 ký tự." }
+    return normalized
 }
 
 private fun String.escapeLikePattern(): String = buildString(length) {
