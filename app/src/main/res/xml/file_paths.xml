@@ -3,4 +3,7 @@
     <cache-path
         name="pdf_exports"
         path="pdf_exports/" />
+    <cache-path
+        name="text_exports"
+        path="text_exports/" />
 </paths>

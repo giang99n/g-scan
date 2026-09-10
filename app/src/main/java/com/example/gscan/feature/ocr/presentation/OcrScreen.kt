@@ -3,6 +3,11 @@ package com.example.gscan.feature.ocr.presentation
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,20 +22,25 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SaveAlt
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,12 +48,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gscan.core.designsystem.component.GScanTopAppBar
 import com.example.gscan.feature.ocr.domain.model.OcrJobStatus
 import com.example.gscan.feature.ocr.domain.model.OcrPageStatus
 import com.example.gscan.feature.ocr.domain.model.OcrPageText
+import com.example.gscan.feature.ocr.domain.model.OcrTextExportMode
+import java.io.File
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,6 +68,17 @@ fun OcrRoute(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val saveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE),
+    ) { uri -> uri?.let { viewModel.saveTextTo(it.toString()) } }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is OcrEffect.ShowMessage -> snackbarHostState.showSnackbar(effect.message)
+            }
+        }
+    }
 
     OcrScreen(
         uiState = uiState,
@@ -75,6 +99,36 @@ fun OcrRoute(
                 scope.launch { snackbarHostState.showSnackbar("Đã sao chép toàn bộ văn bản.") }
             }
         },
+        onExportModeSelected = viewModel::selectExportMode,
+        onCreateText = viewModel::createText,
+        onSaveText = {
+            uiState.exportedText?.let { saveLauncher.launch(it.displayName) }
+        },
+        onShareText = {
+            val exported = uiState.exportedText
+            if (exported != null) {
+                runCatching {
+                    val file = File(exported.filePath)
+                    check(file.isFile) { "Exported TXT is no longer available" }
+                    val contentUri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = TEXT_MIME_TYPE
+                        putExtra(Intent.EXTRA_STREAM, contentUri)
+                        clipData = ClipData.newRawUri("GScan OCR", contentUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Chia sẻ văn bản OCR"))
+                }.onFailure {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Không thể mở ứng dụng chia sẻ.")
+                    }
+                }
+            }
+        },
     )
 }
 
@@ -87,10 +141,25 @@ private fun OcrScreen(
     onCancelClick: () -> Unit,
     onCopyPage: (OcrPageText) -> Unit,
     onCopyAll: () -> Unit,
+    onExportModeSelected: (OcrTextExportMode) -> Unit,
+    onCreateText: () -> Unit,
+    onSaveText: () -> Unit,
+    onShareText: () -> Unit,
 ) {
     val isRunning = uiState.job.status == OcrJobStatus.QUEUED ||
         uiState.job.status == OcrJobStatus.RUNNING
     val hasText = uiState.results.any { it.text.isNotBlank() }
+    val exportBusy = uiState.isCreatingText || uiState.isSavingText
+    val hasExportableText = when (uiState.exportMode) {
+        OcrTextExportMode.SUCCESSFUL_ONLY -> uiState.results.any {
+            it.status == OcrPageStatus.SUCCEEDED && it.text.isNotBlank()
+        }
+        OcrTextExportMode.KEEP_PAGE_PLACEHOLDERS -> hasText
+    }
+
+    BackHandler(enabled = exportBusy) {
+        // Không rời màn hình khi file đang được tạo hoặc ghi vào URI người dùng đã chọn.
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -98,18 +167,19 @@ private fun OcrScreen(
             GScanTopAppBar(
                 title = uiState.title ?: "Nhận dạng văn bản",
                 onBackClick = onBackClick,
+                navigationEnabled = !exportBusy,
                 actions = {
                     if (hasText) {
-                        IconButton(onClick = onCopyAll) {
+                        IconButton(onClick = onCopyAll, enabled = !exportBusy) {
                             Icon(Icons.Rounded.ContentCopy, contentDescription = "Sao chép toàn bộ")
                         }
                     }
                     if (isRunning) {
-                        IconButton(onClick = onCancelClick) {
+                        IconButton(onClick = onCancelClick, enabled = !exportBusy) {
                             Icon(Icons.Rounded.Stop, contentDescription = "Dừng nhận dạng")
                         }
                     } else if (uiState.detailsAvailable && uiState.pageCount > 0) {
-                        IconButton(onClick = onStartClick) {
+                        IconButton(onClick = onStartClick, enabled = !exportBusy) {
                             Icon(Icons.Rounded.Refresh, contentDescription = "Chạy lại nhận dạng")
                         }
                     }
@@ -144,8 +214,17 @@ private fun OcrScreen(
                 OcrJobHeader(
                     uiState = uiState,
                     isRunning = isRunning,
+                    actionsEnabled = !exportBusy,
                     onStartClick = onStartClick,
                     onCancelClick = onCancelClick,
+                )
+                OcrTextExportCard(
+                    uiState = uiState,
+                    enabled = hasExportableText && !isRunning,
+                    onModeSelected = onExportModeSelected,
+                    onCreate = onCreateText,
+                    onSave = onSaveText,
+                    onShare = onShareText,
                 )
                 if (uiState.results.isEmpty()) {
                     OcrMessage(
@@ -173,9 +252,118 @@ private fun OcrScreen(
 }
 
 @Composable
+private fun OcrTextExportCard(
+    uiState: OcrUiState,
+    enabled: Boolean,
+    onModeSelected: (OcrTextExportMode) -> Unit,
+    onCreate: () -> Unit,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+) {
+    val busy = uiState.isCreatingText || uiState.isSavingText
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Xuất văn bản TXT", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Nội dung được sắp theo đúng thứ tự trang.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OcrExportModeRow(
+                title = "Chỉ trang OCR thành công",
+                description = "Bỏ qua trang lỗi, trống hoặc chưa nhận dạng.",
+                selected = uiState.exportMode == OcrTextExportMode.SUCCESSFUL_ONLY,
+                enabled = !busy,
+                onClick = { onModeSelected(OcrTextExportMode.SUCCESSFUL_ONLY) },
+            )
+            OcrExportModeRow(
+                title = "Giữ đủ vị trí trang",
+                description = "Thêm placeholder cho trang chưa có văn bản.",
+                selected = uiState.exportMode == OcrTextExportMode.KEEP_PAGE_PLACEHOLDERS,
+                enabled = !busy,
+                onClick = { onModeSelected(OcrTextExportMode.KEEP_PAGE_PLACEHOLDERS) },
+            )
+            Button(
+                onClick = onCreate,
+                enabled = enabled && !busy,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (uiState.isCreatingText) {
+                    CircularProgressIndicator(Modifier.padding(end = 8.dp), strokeWidth = 2.dp)
+                }
+                Text(if (uiState.exportedText == null) "Tạo file TXT" else "Tạo lại file TXT")
+            }
+            if (!enabled && !busy) {
+                Text(
+                    "Không có trang phù hợp với chế độ xuất đã chọn, hoặc OCR đang chạy.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            uiState.exportErrorMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
+            uiState.exportedText?.let { exported ->
+                Text(
+                    "Đã sẵn sàng: ${exported.displayName} (${exported.exportedPageCount}/${exported.pageCount} trang)",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(
+                        onClick = onSave,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Rounded.SaveAlt, contentDescription = null)
+                        Text(if (uiState.isSavingText) "Đang lưu" else "Lưu", Modifier.padding(start = 6.dp))
+                    }
+                    FilledTonalButton(
+                        onClick = onShare,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Rounded.Share, contentDescription = null)
+                        Text("Chia sẻ", Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OcrExportModeRow(
+    title: String,
+    description: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick, enabled = enabled)
+        Column(Modifier.padding(start = 6.dp)) {
+            Text(title)
+            Text(
+                description,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
 private fun OcrJobHeader(
     uiState: OcrUiState,
     isRunning: Boolean,
+    actionsEnabled: Boolean,
     onStartClick: () -> Unit,
     onCancelClick: () -> Unit,
 ) {
@@ -195,7 +383,7 @@ private fun OcrJobHeader(
                 progress = { progress.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedButton(onClick = onCancelClick) { Text("Dừng") }
+            OutlinedButton(onClick = onCancelClick, enabled = actionsEnabled) { Text("Dừng") }
         } else {
             if (uiState.unrecognizedPageCount > 0 && uiState.results.isNotEmpty()) {
                 Text(
@@ -212,7 +400,7 @@ private fun OcrJobHeader(
                 OcrJobStatus.SUCCEEDED -> Text("Đã nhận dạng xong ${uiState.pageCount} trang.")
                 else -> Unit
             }
-            Button(onClick = onStartClick) {
+            Button(onClick = onStartClick, enabled = actionsEnabled) {
                 Text(if (uiState.results.isEmpty()) "Nhận dạng" else "Chạy lại OCR")
             }
         }
@@ -305,3 +493,5 @@ private fun Context.copyText(label: String, text: String) {
     getSystemService(ClipboardManager::class.java)
         .setPrimaryClip(ClipData.newPlainText(label, text))
 }
+
+private const val TEXT_MIME_TYPE = "text/plain"

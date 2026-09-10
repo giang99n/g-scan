@@ -48,3 +48,29 @@ class OcrException(
     val reason: OcrFailure,
     cause: Throwable? = null,
 ) : RuntimeException(reason.name, cause)
+
+enum class OcrTextExportMode {
+    SUCCESSFUL_ONLY,
+    KEEP_PAGE_PLACEHOLDERS,
+}
+
+data class ExportedOcrText(
+    val filePath: String,
+    val displayName: String,
+    val pageCount: Int,
+    val exportedPageCount: Int,
+)
+
+enum class OcrTextExportFailure {
+    DOCUMENT_NOT_FOUND,
+    NO_TEXT,
+    STORAGE_FULL,
+    WRITE_FAILED,
+    SOURCE_UNAVAILABLE,
+    UNKNOWN,
+}
+
+class OcrTextExportException(
+    val reason: OcrTextExportFailure,
+    cause: Throwable? = null,
+) : RuntimeException(reason.name, cause)

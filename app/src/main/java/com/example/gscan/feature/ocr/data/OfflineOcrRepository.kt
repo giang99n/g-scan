@@ -21,6 +21,10 @@ import com.example.gscan.feature.ocr.domain.model.OcrJobStatus
 import com.example.gscan.feature.ocr.domain.model.OcrPageStatus
 import com.example.gscan.feature.ocr.domain.model.OcrPageText
 import com.example.gscan.feature.ocr.domain.model.OcrRunSummary
+import com.example.gscan.feature.ocr.domain.model.ExportedOcrText
+import com.example.gscan.feature.ocr.domain.model.OcrTextExportException
+import com.example.gscan.feature.ocr.domain.model.OcrTextExportFailure
+import com.example.gscan.feature.ocr.domain.model.OcrTextExportMode
 import com.example.gscan.feature.ocr.domain.repository.OcrRepository
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
@@ -29,6 +33,8 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.IOException
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -40,6 +46,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 @Singleton
 class OfflineOcrRepository @Inject constructor(
@@ -162,6 +170,116 @@ class OfflineOcrRepository @Inject constructor(
         OcrRunSummary(totalPages = pages.size, failedPages = failedPages)
     }
 
+    override suspend fun createTextExport(
+        documentId: String,
+        mode: OcrTextExportMode,
+    ): ExportedOcrText = withContext(Dispatchers.IO) {
+        operationLock.mutex.withLock {
+            val details = documentDao.getWithPages(documentId)
+                ?: throw OcrTextExportException(OcrTextExportFailure.DOCUMENT_NOT_FOUND)
+            val pages = details.pages.sortedBy { it.position }
+            val resultsByPageId = documentDao.getOcrResults(documentId)
+                .associateBy { it.result.pageId }
+            val hasAnyText = resultsByPageId.values.any { it.result.text.isNotBlank() }
+            val exportablePages = when (mode) {
+                OcrTextExportMode.SUCCESSFUL_ONLY -> pages.filter { page ->
+                    resultsByPageId[page.id]?.result?.let { result ->
+                        result.status == OcrPageStatus.SUCCEEDED.name && result.text.isNotBlank()
+                    } == true
+                }
+                OcrTextExportMode.KEEP_PAGE_PLACEHOLDERS -> pages
+            }
+            if (!hasAnyText || exportablePages.isEmpty()) {
+                throw OcrTextExportException(OcrTextExportFailure.NO_TEXT)
+            }
+
+            val directory = File(context.cacheDir, TEXT_EXPORT_DIRECTORY).apply {
+                if (!exists() && !mkdirs()) {
+                    throw OcrTextExportException(OcrTextExportFailure.WRITE_FAILED)
+                }
+            }
+            cleanupExpiredTextExports(directory)
+            if (directory.usableSpace < MIN_FREE_SPACE_BYTES) {
+                throw OcrTextExportException(OcrTextExportFailure.STORAGE_FULL)
+            }
+
+            val displayName = "${details.document.title.toSafeTextFileName()}-${System.currentTimeMillis()}.txt"
+            val destination = File(directory, displayName)
+            val temporary = File(directory, ".$displayName.part")
+            var committed = false
+            try {
+                temporary.outputStream().bufferedWriter(StandardCharsets.UTF_8).use { writer ->
+                    writer.appendLine(details.document.title)
+                    writer.appendLine("Xuất từ GScan")
+                    writer.appendLine()
+                    exportablePages.forEachIndexed { index, page ->
+                        currentCoroutineContext().ensureActive()
+                        if (index > 0) writer.appendLine()
+                        writer.appendLine("===== Trang ${page.position + 1} =====")
+                        val result = resultsByPageId[page.id]?.result
+                        writer.appendLine(result.toExportText())
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                if (!temporary.renameTo(destination)) {
+                    throw OcrTextExportException(OcrTextExportFailure.WRITE_FAILED)
+                }
+                committed = true
+                ExportedOcrText(
+                    filePath = destination.absolutePath,
+                    displayName = displayName,
+                    pageCount = pages.size,
+                    exportedPageCount = exportablePages.size,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: OcrTextExportException) {
+                throw error
+            } catch (error: IOException) {
+                val reason = if (directory.usableSpace < MIN_FREE_SPACE_BYTES) {
+                    OcrTextExportFailure.STORAGE_FULL
+                } else {
+                    OcrTextExportFailure.WRITE_FAILED
+                }
+                throw OcrTextExportException(reason, error)
+            } catch (error: Exception) {
+                throw OcrTextExportException(OcrTextExportFailure.UNKNOWN, error)
+            } finally {
+                if (!committed) temporary.delete()
+            }
+        }
+    }
+
+    override suspend fun saveTextExport(
+        exportedText: ExportedOcrText,
+        destinationUri: String,
+    ) = withContext(Dispatchers.IO) {
+        val source = requireValidTextExport(exportedText.filePath)
+        try {
+            val output = context.contentResolver.openOutputStream(destinationUri.toUri(), "w")
+                ?: throw OcrTextExportException(OcrTextExportFailure.WRITE_FAILED)
+            source.inputStream().use { input ->
+                output.use { target ->
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        target.write(buffer, 0, count)
+                    }
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: OcrTextExportException) {
+            throw error
+        } catch (error: IOException) {
+            throw OcrTextExportException(OcrTextExportFailure.WRITE_FAILED, error)
+        } catch (error: SecurityException) {
+            throw OcrTextExportException(OcrTextExportFailure.WRITE_FAILED, error)
+        }
+    }
+
     private suspend fun recognizePage(page: PageEntity): String {
         val bitmap = decodePage(page)
         return try {
@@ -254,6 +372,40 @@ class OfflineOcrRepository @Inject constructor(
 
     private fun workName(documentId: String) = "document-ocr-$documentId"
 
+    private fun OcrResultEntity?.toExportText(): String = when {
+        this == null -> "[Chưa nhận dạng]"
+        status == OcrPageStatus.SUCCEEDED.name && text.isNotBlank() -> text
+        status == OcrPageStatus.SUCCEEDED.name -> "[Không tìm thấy văn bản]"
+        status == OcrPageStatus.FAILED.name && text.isNotBlank() ->
+            "[Kết quả OCR trước; lần nhận dạng gần nhất thất bại]\n$text"
+        status == OcrPageStatus.FAILED.name -> "[Nhận dạng thất bại]"
+        text.isNotBlank() -> "[Kết quả OCR trước; nhận dạng chưa hoàn tất]\n$text"
+        else -> "[Chưa nhận dạng xong]"
+    }
+
+    private fun requireValidTextExport(filePath: String): File {
+        val directory = File(context.cacheDir, TEXT_EXPORT_DIRECTORY).canonicalFile
+        val file = File(filePath).canonicalFile
+        if (file.parentFile != directory || !file.isFile || file.extension.lowercase() != "txt") {
+            throw OcrTextExportException(OcrTextExportFailure.SOURCE_UNAVAILABLE)
+        }
+        return file
+    }
+
+    private fun cleanupExpiredTextExports(directory: File) {
+        val cutoff = System.currentTimeMillis() - TEXT_EXPORT_RETENTION_MILLIS
+        directory.listFiles().orEmpty().forEach { file ->
+            if (file.isFile && file.lastModified() < cutoff) file.delete()
+        }
+    }
+
+    private fun String.toSafeTextFileName(): String =
+        replace(INVALID_FILE_NAME_CHARACTERS, "_")
+            .trim()
+            .trim('.')
+            .take(MAX_FILE_NAME_LENGTH)
+            .ifBlank { DEFAULT_FILE_NAME }
+
     private fun Int.normalizedRotation(): Int = ((this % 360) + 360) % 360
 
     // ML Kit Task không hỗ trợ cancel. Chờ Task kết thúc trước khi coroutine tiếp tục
@@ -274,5 +426,12 @@ class OfflineOcrRepository @Inject constructor(
         const val OCR_MAX_DIMENSION_PX = 2_400
         const val OCR_SCRIPT = "LATIN"
         const val OCR_ENGINE_VERSION = "ML_KIT_TEXT_RECOGNITION_16_0_1"
+        const val TEXT_EXPORT_DIRECTORY = "text_exports"
+        const val COPY_BUFFER_BYTES = 64 * 1024
+        const val MIN_FREE_SPACE_BYTES = 1024L * 1024L
+        const val TEXT_EXPORT_RETENTION_MILLIS = 24L * 60L * 60L * 1_000L
+        const val MAX_FILE_NAME_LENGTH = 40
+        const val DEFAULT_FILE_NAME = "GScan-OCR"
+        val INVALID_FILE_NAME_CHARACTERS = Regex("[\\\\/:*?\"<>|]")
     }
 }
