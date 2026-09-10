@@ -23,7 +23,7 @@ class GoogleBarcodeScanner @javax.inject.Inject constructor(
                     val content = barcode.rawValue
                     if (content.isNullOrEmpty()) onError("Mã không chứa văn bản có thể hiển thị; mã nhị phân chưa được hỗ trợ.")
                     else if (content.length > 32768) onError("Nội dung mã quá dài để hiển thị và lưu.")
-                    else onResult(BarcodeResult(content, formatLabel(barcode.format), typeLabel(barcode.valueType)))
+                    else onResult(barcode.toDomainResult(content))
                 }
                 .addOnCanceledListener(onCancelled)
                 .addOnFailureListener { onError("Không mở được máy quét. Lần đầu cần mạng để tải module; hãy kiểm tra Google Play services và thử lại.") }
@@ -32,6 +32,9 @@ class GoogleBarcodeScanner @javax.inject.Inject constructor(
         }
     }
 }
+
+internal fun Barcode.toDomainResult(content: String = requireNotNull(rawValue)): BarcodeResult =
+    BarcodeResult(content, formatLabel(format), typeLabel(valueType))
 
 private fun formatLabel(format: Int): String = when (format) {
     Barcode.FORMAT_QR_CODE -> "QR"

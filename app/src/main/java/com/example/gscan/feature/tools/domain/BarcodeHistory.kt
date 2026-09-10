@@ -12,6 +12,20 @@ interface BarcodeScanner {
     fun scan(onResult: (BarcodeResult) -> Unit, onCancelled: () -> Unit, onError: (String) -> Unit)
 }
 
+interface GalleryBarcodeScanner {
+    suspend fun scan(imageUri: String): List<BarcodeResult>
+}
+
+enum class GalleryBarcodeScanFailure {
+    INVALID_URI,
+    IMAGE_UNREADABLE,
+    NO_READABLE_CODE,
+    CONTENT_TOO_LONG,
+    PROCESSING_FAILED,
+}
+
+class GalleryBarcodeScanException(val failure: GalleryBarcodeScanFailure) : Exception(failure.name)
+
 interface BarcodeHistoryRepository {
     fun observe(): Flow<List<BarcodeHistoryItem>>
     suspend fun save(item: BarcodeHistoryItem)

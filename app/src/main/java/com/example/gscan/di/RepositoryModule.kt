@@ -23,6 +23,11 @@ abstract class RepositoryModule {
     ): com.example.gscan.feature.tools.domain.BarcodeScanner
 
     @Binds
+    abstract fun bindGalleryBarcodeScanner(
+        implementation: com.example.gscan.feature.tools.data.MlKitGalleryBarcodeScanner,
+    ): com.example.gscan.feature.tools.domain.GalleryBarcodeScanner
+
+    @Binds
     @Singleton
     abstract fun bindBarcodeHistoryRepository(
         implementation: com.example.gscan.feature.tools.data.OfflineBarcodeHistoryRepository,

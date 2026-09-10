@@ -6,6 +6,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,6 +32,11 @@ fun QrBarcodeScreen(onBackClick: () -> Unit, viewModel: QrBarcodeViewModel = hil
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) viewModel.gallerySelectionCancelled() else viewModel.scanImage(uri.toString())
+    }
     LaunchedEffect(state.selected?.id) {
         if (state.selected != null) listState.animateScrollToItem(0)
     }
@@ -37,6 +45,33 @@ fun QrBarcodeScreen(onBackClick: () -> Unit, viewModel: QrBarcodeViewModel = hil
     var openUrl by remember { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     BackHandler(state.busy || state.unsaved) { if (!state.busy) discard = true }
+
+    if (state.galleryCandidates.isNotEmpty()) AlertDialog(
+        onDismissRequest = viewModel::dismissGalleryResults,
+        title = { Text("Chọn mã trong ảnh") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(state.galleryCandidates) { result ->
+                    Card(
+                        onClick = { viewModel.selectGalleryResult(result) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("${result.format} · ${result.type}", style = MaterialTheme.typography.titleSmall)
+                            Text(result.content, maxLines = 3, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = viewModel::dismissGalleryResults) { Text("Hủy") }
+        },
+    )
 
     if (deleteId != null || clear) AlertDialog(
         onDismissRequest = { deleteId = null; clear = false },
@@ -77,10 +112,20 @@ fun QrBarcodeScreen(onBackClick: () -> Unit, viewModel: QrBarcodeViewModel = hil
             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text("Quét QR, mã sản phẩm và các barcode phổ biến bằng camera.")
-                Text("Cần Google Play services. Lần đầu có thể cần mạng để tải máy quét.", style = MaterialTheme.typography.bodySmall)
+                Text("Quét QR, mã sản phẩm và các barcode phổ biến bằng camera hoặc từ ảnh.")
+                Text("Camera cần Google Play services; đọc từ ảnh chạy offline trên thiết bị.", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = viewModel::scan, enabled = !state.busy && !state.unsaved, modifier = Modifier.fillMaxWidth()) {
                     Text(if (state.scanning) "Đang mở máy quét…" else "Quét bằng camera")
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (state.readingImage) viewModel.cancelImageScan()
+                        else imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                    enabled = !state.saving && !state.scanning && !state.unsaved,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (state.readingImage) "Hủy đọc ảnh" else "Chọn ảnh từ thư viện")
                 }
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 state.message?.let { Text(it) }
