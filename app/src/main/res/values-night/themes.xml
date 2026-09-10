@@ -5,4 +5,11 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
+
+    <style name="Theme.Gscan.Splash" parent="Theme.Gscan">
+        <item name="android:windowBackground">@drawable/gscan_splash_screen</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/gscan_launcher_background</item>
+        <item name="android:navigationBarColor">@color/gscan_launcher_background</item>
+    </style>
 </resources>

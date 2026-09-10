@@ -18,4 +18,11 @@ class ManageDocumentPagesUseCase @Inject constructor(
     suspend fun delete(documentId: String, pageId: String) {
         repository.deletePage(documentId, pageId)
     }
+
+    suspend fun duplicate(documentId: String, pageId: String): String =
+        repository.duplicatePage(documentId, pageId)
+
+    suspend fun add(documentId: String, sourceUris: List<String>) {
+        repository.addPages(documentId, sourceUris)
+    }
 }

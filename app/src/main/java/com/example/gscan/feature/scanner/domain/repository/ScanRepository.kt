@@ -5,4 +5,10 @@ interface ScanRepository {
         title: String,
         sourceUris: List<String>,
     ): String
+
+    suspend fun savePdfDocument(
+        title: String,
+        sourceUri: String,
+        onProgress: (completedPages: Int, totalPages: Int) -> Unit,
+    ): String
 }

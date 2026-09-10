@@ -8,21 +8,164 @@ import androidx.room.Transaction
 import com.example.gscan.core.database.model.DocumentEntity
 import com.example.gscan.core.database.model.DocumentSummary
 import com.example.gscan.core.database.model.DocumentWithPages
+import com.example.gscan.core.database.model.OcrResultEntity
+import com.example.gscan.core.database.model.OcrResultWithPosition
+import com.example.gscan.core.database.model.OcrSearchEntity
 import com.example.gscan.core.database.model.PageEntity
+import com.example.gscan.core.database.model.DocumentTagEntity
+import com.example.gscan.core.database.model.DocumentTagRow
+import com.example.gscan.core.database.model.FolderEntity
+import com.example.gscan.core.database.model.TagEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class DocumentDao {
+    @Query("SELECT * FROM signature_templates ORDER BY name, id")
+    abstract fun observeSignatureTemplates(): Flow<List<com.example.gscan.core.database.model.SignatureTemplateEntity>>
+
+    @Insert
+    abstract suspend fun insertSignatureTemplate(template: com.example.gscan.core.database.model.SignatureTemplateEntity)
+
+    @Query("DELETE FROM signature_templates WHERE id = :id")
+    abstract suspend fun deleteSignatureTemplate(id: String)
+
+    @Query(
+        "UPDATE pages SET signatureInk = :ink WHERE id = :pageId AND documentId = :documentId " +
+            "AND EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL)",
+    )
+    abstract suspend fun updateSignature(documentId: String, pageId: String, ink: String): Int
+
+    @Query("UPDATE documents SET updatedAtEpochMillis = :now WHERE id = :id AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun touchDocument(id: String, now: Long)
+
     @Query(
         "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
             "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
-            "AS thumbnailRotationDegrees FROM documents ORDER BY updatedAtEpochMillis DESC",
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName " +
+            "FROM documents WHERE deletedAtEpochMillis IS NULL ORDER BY updatedAtEpochMillis DESC",
     )
     abstract fun observeAllSummaries(): Flow<List<DocumentSummary>>
 
+    @Query(
+        "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
+            "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName FROM documents " +
+            "WHERE deletedAtEpochMillis IS NULL AND (title LIKE :titlePattern ESCAPE '\\' OR id IN " +
+            "(SELECT documentId FROM ocr_search WHERE ocr_search.text MATCH :ftsQuery) OR id IN " +
+            "(SELECT documentId FROM document_tags INNER JOIN tags ON tags.id = document_tags.tagId " +
+            "WHERE tags.name LIKE :titlePattern ESCAPE '\\')) " +
+            "ORDER BY updatedAtEpochMillis DESC",
+    )
+    abstract fun observeSearchSummaries(
+        titlePattern: String,
+        ftsQuery: String,
+    ): Flow<List<DocumentSummary>>
+
+    @Query(
+        "SELECT documents.*, COALESCE((SELECT rotationDegrees FROM pages " +
+            "WHERE documentId = documents.id ORDER BY position LIMIT 1), 0) " +
+            "AS thumbnailRotationDegrees, COALESCE((SELECT signatureInk FROM pages WHERE documentId = documents.id ORDER BY position LIMIT 1), '[]') AS thumbnailSignatureInk, " +
+            "(SELECT name FROM folders WHERE id = documents.folderId) AS folderName " +
+            "FROM documents WHERE deletedAtEpochMillis IS NOT NULL ORDER BY deletedAtEpochMillis DESC",
+    )
+    abstract fun observeTrashSummaries(): Flow<List<DocumentSummary>>
+
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
+    abstract fun observeFolders(): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE, id")
+    abstract fun observeTags(): Flow<List<TagEntity>>
+
+    @Query(
+        "SELECT document_tags.documentId, tags.id AS tagId, tags.name AS tagName " +
+            "FROM document_tags INNER JOIN tags ON tags.id = document_tags.tagId " +
+            "ORDER BY tags.name COLLATE NOCASE, tags.id",
+    )
+    abstract fun observeDocumentTags(): Flow<List<DocumentTagRow>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertFolderRow(folder: FolderEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertTagRow(tag: TagEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
+
+    @Query("UPDATE folders SET name = :name WHERE id = :id")
+    abstract suspend fun renameFolderRow(id: String, name: String): Int
+
+    @Query("UPDATE tags SET name = :name WHERE id = :id")
+    abstract suspend fun renameTagRow(id: String, name: String): Int
+
+    @Query("SELECT COUNT(*) FROM folders WHERE name = :name COLLATE NOCASE AND id != :excludeId")
+    abstract suspend fun countFoldersNamed(name: String, excludeId: String = ""): Int
+
+    @Query("SELECT COUNT(*) FROM tags WHERE name = :name COLLATE NOCASE AND id != :excludeId")
+    abstract suspend fun countTagsNamed(name: String, excludeId: String = ""): Int
+
+    @Query("DELETE FROM folders WHERE id = :id")
+    abstract suspend fun deleteFolder(id: String): Int
+
+    @Query("DELETE FROM tags WHERE id = :id")
+    abstract suspend fun deleteTag(id: String): Int
+
+    @Query("SELECT COUNT(*) FROM documents WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun countActiveDocuments(ids: Set<String>): Int
+
+    @Query("SELECT COUNT(*) FROM folders WHERE id = :id")
+    abstract suspend fun countFolder(id: String): Int
+
+    @Query("SELECT COUNT(*) FROM tags WHERE id IN (:ids)")
+    abstract suspend fun countTags(ids: Set<String>): Int
+
+    @Query("UPDATE documents SET isFavorite = :favorite, updatedAtEpochMillis = :now WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun updateFavorite(ids: Set<String>, favorite: Boolean, now: Long): Int
+
+    @Query("UPDATE documents SET folderId = :folderId, updatedAtEpochMillis = :now WHERE id IN (:ids) AND deletedAtEpochMillis IS NULL")
+    abstract suspend fun updateFolder(ids: Set<String>, folderId: String?, now: Long): Int
+
+    @Query("DELETE FROM document_tags WHERE documentId IN (:documentIds)")
+    abstract suspend fun deleteDocumentTags(documentIds: Set<String>)
+
+    @Query("DELETE FROM document_tags WHERE documentId IN (:documentIds) AND tagId IN (:tagIds)")
+    abstract suspend fun deleteSelectedDocumentTags(documentIds: Set<String>, tagIds: Set<String>)
+
     @Transaction
-    @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
+    open suspend fun insertFolder(folder: FolderEntity) {
+        if (countFoldersNamed(folder.name) != 0) throw OrganizationMutationException()
+        insertFolderRow(folder)
+    }
+
+    @Transaction
+    open suspend fun updateFolderName(id: String, name: String) {
+        if (countFoldersNamed(name, id) != 0 || renameFolderRow(id, name) != 1) {
+            throw OrganizationMutationException()
+        }
+    }
+
+    @Transaction
+    open suspend fun insertTag(tag: TagEntity) {
+        if (countTagsNamed(tag.name) != 0) throw OrganizationMutationException()
+        insertTagRow(tag)
+    }
+
+    @Transaction
+    open suspend fun updateTagName(id: String, name: String) {
+        if (countTagsNamed(name, id) != 0 || renameTagRow(id, name) != 1) {
+            throw OrganizationMutationException()
+        }
+    }
+
+    @Transaction
+    @Query("SELECT * FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
     abstract fun observeWithPages(documentId: String): Flow<DocumentWithPages?>
+
+    @Transaction
+    @Query("SELECT * FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
+    abstract suspend fun getWithPages(documentId: String): DocumentWithPages?
 
     @Query("SELECT id FROM documents")
     abstract suspend fun getAllIds(): List<String>
@@ -33,8 +176,110 @@ abstract class DocumentDao {
     @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId)")
     abstract suspend fun exists(documentId: String): Boolean
 
+    @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL)")
+    abstract suspend fun existsActive(documentId: String): Boolean
+
+    @Query("SELECT title FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NULL LIMIT 1")
+    abstract suspend fun getDocumentTitle(documentId: String): String?
+
     @Query("DELETE FROM documents WHERE id = :id")
-    abstract suspend fun deleteById(id: String)
+    abstract suspend fun deleteById(id: String): Int
+
+    @Query("SELECT id FROM documents WHERE deletedAtEpochMillis IS NOT NULL")
+    abstract suspend fun getTrashedIds(): List<String>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM documents WHERE id = :documentId AND deletedAtEpochMillis IS NOT NULL)")
+    abstract suspend fun isTrashed(documentId: String): Boolean
+
+    @Query(
+        "UPDATE documents SET deletedAtEpochMillis = :deletedAtEpochMillis, " +
+            "updatedAtEpochMillis = :deletedAtEpochMillis " +
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NULL",
+    )
+    abstract suspend fun moveToTrash(documentId: String, deletedAtEpochMillis: Long): Int
+
+    @Query(
+        "UPDATE documents SET deletedAtEpochMillis = NULL, updatedAtEpochMillis = :updatedAtEpochMillis " +
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NOT NULL",
+    )
+    abstract suspend fun restoreFromTrash(documentId: String, updatedAtEpochMillis: Long): Int
+
+    @Query(
+        "UPDATE documents SET title = :title, updatedAtEpochMillis = :updatedAtEpochMillis " +
+            "WHERE id = :documentId AND deletedAtEpochMillis IS NULL",
+    )
+    abstract suspend fun renameDocument(
+        documentId: String,
+        title: String,
+        updatedAtEpochMillis: Long,
+    ): Int
+
+    @Transaction
+    open suspend fun setFavorite(ids: Set<String>, favorite: Boolean, now: Long) {
+        requireActiveDocuments(ids)
+        check(updateFavorite(ids, favorite, now) == ids.size)
+    }
+
+    @Transaction
+    open suspend fun moveDocuments(ids: Set<String>, folderId: String?, now: Long) {
+        requireActiveDocuments(ids)
+        if (folderId != null && countFolder(folderId) != 1) throw OrganizationMutationException()
+        check(updateFolder(ids, folderId, now) == ids.size)
+    }
+
+    @Transaction
+    open suspend fun updateDocumentTags(
+        documentIds: Set<String>,
+        addedTagIds: Set<String>,
+        removedTagIds: Set<String>,
+    ) {
+        requireActiveDocuments(documentIds)
+        check(addedTagIds.intersect(removedTagIds).isEmpty())
+        val referencedTagIds = addedTagIds + removedTagIds
+        if (referencedTagIds.isNotEmpty() && countTags(referencedTagIds) != referencedTagIds.size) {
+            throw OrganizationMutationException()
+        }
+        if (removedTagIds.isNotEmpty()) deleteSelectedDocumentTags(documentIds, removedTagIds)
+        insertDocumentTags(documentIds.flatMap { documentId ->
+            addedTagIds.map { tagId -> DocumentTagEntity(documentId, tagId) }
+        })
+    }
+
+    @Transaction
+    open suspend fun moveDocumentsToTrash(ids: Set<String>, now: Long) {
+        requireActiveDocuments(ids)
+        ids.forEach { id -> check(moveToTrash(id, now) == 1) }
+    }
+
+    @Query("DELETE FROM ocr_search WHERE documentId = :documentId")
+    abstract suspend fun deleteOcrSearchByDocumentId(documentId: String)
+
+    @Query("DELETE FROM ocr_search WHERE pageId = :pageId")
+    abstract suspend fun deleteOcrSearchByPageId(pageId: String)
+
+    @Query(
+        "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
+            "INNER JOIN pages ON pages.id = ocr_results.pageId " +
+            "INNER JOIN documents ON documents.id = ocr_results.documentId " +
+            "WHERE ocr_results.documentId = :documentId " +
+            "AND documents.deletedAtEpochMillis IS NULL ORDER BY pages.position",
+    )
+    abstract fun observeOcrResults(documentId: String): Flow<List<OcrResultWithPosition>>
+
+    @Query(
+        "SELECT ocr_results.*, pages.position AS position FROM ocr_results " +
+            "INNER JOIN pages ON pages.id = ocr_results.pageId " +
+            "INNER JOIN documents ON documents.id = ocr_results.documentId " +
+            "WHERE ocr_results.documentId = :documentId " +
+            "AND documents.deletedAtEpochMillis IS NULL ORDER BY pages.position",
+    )
+    abstract suspend fun getOcrResults(documentId: String): List<OcrResultWithPosition>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertOcrResult(result: OcrResultEntity)
+
+    @Insert
+    abstract suspend fun insertOcrSearch(result: OcrSearchEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertDocument(document: DocumentEntity)
@@ -44,6 +289,9 @@ abstract class DocumentDao {
 
     @Query("SELECT * FROM pages WHERE documentId = :documentId ORDER BY position")
     abstract suspend fun getPages(documentId: String): List<PageEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM pages WHERE id = :pageId AND documentId = :documentId)")
+    abstract suspend fun pageExists(documentId: String, pageId: String): Boolean
 
     @Query("UPDATE pages SET rotationDegrees = :rotationDegrees WHERE id = :pageId AND documentId = :documentId")
     abstract suspend fun updatePageRotation(
@@ -73,6 +321,18 @@ abstract class DocumentDao {
         documentId: String,
         pageCount: Int,
         thumbnailUri: String?,
+        updatedAtEpochMillis: Long,
+    ): Int
+
+    @Query(
+        "UPDATE documents SET pageCount = :pageCount, thumbnailUri = :thumbnailUri, " +
+            "status = :status, updatedAtEpochMillis = :updatedAtEpochMillis WHERE id = :documentId",
+    )
+    abstract suspend fun updateDocumentAfterPageAppend(
+        documentId: String,
+        pageCount: Int,
+        thumbnailUri: String,
+        status: String,
         updatedAtEpochMillis: Long,
     ): Int
 
@@ -150,6 +410,7 @@ abstract class DocumentDao {
             throw PageMutationException(PageMutationFailure.LAST_PAGE)
         }
 
+        deleteOcrSearchByPageId(pageId)
         deletePageById(documentId, pageId)
         val remainingPages = pages.filterNot { it.id == pageId }
         rewritePagePositions(documentId, remainingPages)
@@ -162,11 +423,121 @@ abstract class DocumentDao {
         return deletedPage.sourceUri
     }
 
+    @Transaction
+    open suspend fun appendPages(
+        documentId: String,
+        pages: List<PageEntity>,
+        maxPageCount: Int,
+        readyStatus: String,
+        updatedAtEpochMillis: Long,
+    ) {
+        val existingPages = requireDocumentPages(documentId)
+        if (pages.isEmpty()) return
+        if (existingPages.size + pages.size > maxPageCount) {
+            throw PageMutationException(PageMutationFailure.TOO_MANY_PAGES)
+        }
+        val expectedPositions = existingPages.size until (existingPages.size + pages.size)
+        if (pages.map(PageEntity::position) != expectedPositions.toList() ||
+            pages.any { it.documentId != documentId }
+        ) {
+            throw PageMutationException(PageMutationFailure.INVALID_POSITION)
+        }
+
+        insertPages(pages)
+        updateDocumentAfterPageAppend(
+            documentId = documentId,
+            pageCount = existingPages.size + pages.size,
+            thumbnailUri = existingPages.firstOrNull()?.sourceUri ?: pages.first().sourceUri,
+            status = readyStatus,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
+    }
+
+    @Transaction
+    open suspend fun duplicatePage(
+        documentId: String,
+        sourcePageId: String,
+        duplicatedPage: PageEntity,
+        maxPageCount: Int,
+        updatedAtEpochMillis: Long,
+    ) {
+        val existingPages = requireDocumentPages(documentId)
+        val sourceIndex = existingPages.indexOfFirst { it.id == sourcePageId }
+        if (sourceIndex < 0) {
+            throw PageMutationException(PageMutationFailure.PAGE_NOT_FOUND)
+        }
+        if (existingPages.size >= maxPageCount) {
+            throw PageMutationException(PageMutationFailure.TOO_MANY_PAGES)
+        }
+        if (duplicatedPage.documentId != documentId || duplicatedPage.position != existingPages.size) {
+            throw PageMutationException(PageMutationFailure.INVALID_POSITION)
+        }
+
+        insertPages(listOf(duplicatedPage))
+        val reorderedPages = existingPages.toMutableList().apply {
+            add(sourceIndex + 1, duplicatedPage)
+        }
+        rewritePagePositions(documentId, reorderedPages)
+        updateDocumentPageSummary(
+            documentId = documentId,
+            pageCount = reorderedPages.size,
+            thumbnailUri = reorderedPages.first().sourceUri,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
+    }
+
+    @Transaction
+    open suspend fun deleteDocument(documentId: String): Int {
+        if (!isTrashed(documentId)) return 0
+        deleteOcrSearchByDocumentId(documentId)
+        return deleteById(documentId)
+    }
+
+    @Transaction
+    open suspend fun deleteAllTrashedDocuments(): List<String> {
+        val ids = getTrashedIds()
+        ids.forEach { documentId ->
+            deleteOcrSearchByDocumentId(documentId)
+            deleteById(documentId)
+        }
+        return ids
+    }
+
+    @Transaction
+    open suspend fun prepareOcr(documentId: String, results: List<OcrResultEntity>) {
+        if (!existsActive(documentId)) throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
+        results.forEach { upsertOcrResult(it) }
+    }
+
+    @Transaction
+    open suspend fun saveOcrResult(result: OcrResultEntity) {
+        if (!existsActive(result.documentId)) {
+            throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
+        }
+        upsertOcrResult(result)
+        deleteOcrSearchByPageId(result.pageId)
+        if (result.text.isNotBlank()) {
+            insertOcrSearch(
+                OcrSearchEntity(
+                    pageId = result.pageId,
+                    documentId = result.documentId,
+                    text = result.text,
+                ),
+            )
+        }
+    }
+
     private suspend fun requireDocumentPages(documentId: String): List<PageEntity> {
-        if (!exists(documentId)) {
+        if (!existsActive(documentId)) {
             throw PageMutationException(PageMutationFailure.DOCUMENT_NOT_FOUND)
         }
         return getPages(documentId)
+    }
+
+    private suspend fun requireActiveDocuments(ids: Set<String>) {
+        if (ids.isEmpty() || countActiveDocuments(ids) != ids.size) {
+            throw OrganizationMutationException()
+        }
     }
 
     private suspend fun rewritePagePositions(
@@ -185,6 +556,9 @@ enum class PageMutationFailure {
     PAGE_NOT_FOUND,
     LAST_PAGE,
     INVALID_POSITION,
+    TOO_MANY_PAGES,
 }
 
 class PageMutationException(val failure: PageMutationFailure) : IllegalStateException(failure.name)
+
+class OrganizationMutationException : IllegalStateException("Organization data changed")

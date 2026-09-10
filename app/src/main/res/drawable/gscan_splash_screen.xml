@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/gscan_launcher_background" />
+
+    <item
+        android:width="180dp"
+        android:height="180dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/gscan_launcher_foreground" />
+    </item>
+</layer-list>

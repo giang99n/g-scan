@@ -26,4 +26,5 @@ data class PageEntity(
     val height: Int,
     val rotationDegrees: Int,
     val createdAtEpochMillis: Long,
+    @androidx.room.ColumnInfo(defaultValue = "'[]'") val signatureInk: String = "[]",
 )

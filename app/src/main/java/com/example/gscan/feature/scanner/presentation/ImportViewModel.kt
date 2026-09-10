@@ -3,6 +3,7 @@ package com.example.gscan.feature.scanner.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gscan.feature.scanner.domain.model.ScanSaveException
+import com.example.gscan.feature.scanner.domain.usecase.ImportPdfUseCase
 import com.example.gscan.feature.scanner.domain.usecase.SaveImportedImagesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -18,6 +19,9 @@ import kotlinx.coroutines.launch
 
 data class ImportUiState(
     val isSaving: Boolean = false,
+    val inputKind: SaveInputKind = SaveInputKind.IMPORT,
+    val completedPages: Int = 0,
+    val totalPages: Int = 0,
     val errorMessage: String? = null,
 )
 
@@ -28,6 +32,7 @@ sealed interface ImportEffect {
 @HiltViewModel
 class ImportViewModel @Inject constructor(
     private val saveImportedImages: SaveImportedImagesUseCase,
+    private val importPdfUseCase: ImportPdfUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ImportUiState())
     val uiState: StateFlow<ImportUiState> = _uiState.asStateFlow()
@@ -39,11 +44,33 @@ class ImportViewModel @Inject constructor(
     fun importImages(sourceUris: List<String>) {
         if (_uiState.value.isSaving || sourceUris.isEmpty()) return
 
+        startImport(SaveInputKind.IMPORT) { saveImportedImages(sourceUris) }
+    }
+
+    fun importPdf(sourceUri: String) {
+        if (_uiState.value.isSaving || sourceUri.isBlank()) return
+
+        startImport(SaveInputKind.PDF) {
+            importPdfUseCase(sourceUri) { completedPages, totalPages ->
+                _uiState.update { state ->
+                    state.copy(
+                        completedPages = completedPages,
+                        totalPages = totalPages,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun startImport(
+        inputKind: SaveInputKind,
+        operation: suspend () -> String,
+    ) {
         importJob = viewModelScope.launch {
-            _uiState.value = ImportUiState(isSaving = true)
+            _uiState.value = ImportUiState(isSaving = true, inputKind = inputKind)
             var committedDocumentId: String? = null
             try {
-                val documentId = saveImportedImages(sourceUris)
+                val documentId = operation()
                 committedDocumentId = documentId
                 _uiState.value = ImportUiState()
                 _effects.send(ImportEffect.DocumentSaved(documentId))
@@ -57,11 +84,13 @@ class ImportViewModel @Inject constructor(
                 }
             } catch (error: ScanSaveException) {
                 _uiState.value = ImportUiState(
-                    errorMessage = error.failure.toUserMessage(SaveInputKind.IMPORT),
+                    inputKind = inputKind,
+                    errorMessage = error.failure.toUserMessage(inputKind),
                 )
             } catch (_: Exception) {
                 _uiState.value = ImportUiState(
-                    errorMessage = "Không thể nhập ảnh. Các file tạm đã được dọn dẹp, hãy thử lại.",
+                    inputKind = inputKind,
+                    errorMessage = "Không thể nhập tài liệu. Các file tạm đã được dọn dẹp, hãy thử lại.",
                 )
             }
         }
@@ -75,9 +104,16 @@ class ImportViewModel @Inject constructor(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
-    fun onPickerFailure() {
+    fun onPickerFailure(inputKind: SaveInputKind) {
         _uiState.update {
-            it.copy(errorMessage = "Không thể mở thư viện ảnh. Vui lòng thử lại.")
+            it.copy(
+                inputKind = inputKind,
+                errorMessage = if (inputKind == SaveInputKind.PDF) {
+                    "Không thể mở trình chọn PDF. Vui lòng thử lại."
+                } else {
+                    "Không thể mở thư viện ảnh. Vui lòng thử lại."
+                },
+            )
         }
     }
 }

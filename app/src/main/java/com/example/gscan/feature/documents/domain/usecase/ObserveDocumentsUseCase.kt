@@ -8,5 +8,6 @@ import javax.inject.Inject
 class ObserveDocumentsUseCase @Inject constructor(
     private val repository: DocumentRepository,
 ) {
-    operator fun invoke(): Flow<List<ScannedDocument>> = repository.observeDocuments()
+    operator fun invoke(query: String = ""): Flow<List<ScannedDocument>> =
+        repository.observeDocuments(query)
 }

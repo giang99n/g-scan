@@ -18,7 +18,14 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GScanDatabase =
         Room.databaseBuilder(context, GScanDatabase::class.java, "gscan.db")
-            .addMigrations(GScanDatabase.MIGRATION_1_2)
+            .addMigrations(
+                GScanDatabase.MIGRATION_1_2,
+                GScanDatabase.MIGRATION_2_3,
+                GScanDatabase.MIGRATION_3_4,
+                GScanDatabase.MIGRATION_4_5,
+                GScanDatabase.MIGRATION_5_6,
+                GScanDatabase.MIGRATION_6_7,
+            )
             .build()
 
     @Provides
