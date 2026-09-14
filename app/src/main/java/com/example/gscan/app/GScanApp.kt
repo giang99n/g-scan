@@ -6,7 +6,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
-import com.example.gscan.feature.backup.presentation.BackupScreen
+import com.example.gscan.feature.about.presentation.AboutPrivacyScreen
+// Backup chưa có implementation; giữ route ở dạng comment để bật lại sau.
+// import com.example.gscan.feature.backup.presentation.BackupScreen
 import com.example.gscan.feature.documents.presentation.DocumentsRoute
 import com.example.gscan.feature.documents.presentation.TrashRoute
 import com.example.gscan.feature.documents.presentation.ComposeDocumentScreen
@@ -40,7 +42,8 @@ private object Route {
     const val DOCUMENT_SIGNATURE = "documents/{$DOCUMENT_ID_ARGUMENT}/signature"
     const val QR_BARCODE = "qr_barcode"
     const val SECURITY = "security"
-    const val BACKUP = "backup"
+    const val ABOUT_PRIVACY = "about_privacy"
+    // const val BACKUP = "backup"
 }
 
 private fun HomeFeature.toRoute(): String = when (this) {
@@ -52,7 +55,8 @@ private fun HomeFeature.toRoute(): String = when (this) {
     HomeFeature.SIGNATURE -> Route.SIGNATURE
     HomeFeature.QR_BARCODE -> Route.QR_BARCODE
     HomeFeature.SECURITY -> Route.SECURITY
-    HomeFeature.BACKUP -> Route.BACKUP
+    HomeFeature.ABOUT_PRIVACY -> Route.ABOUT_PRIVACY
+    // HomeFeature.BACKUP -> Route.BACKUP
 }
 
 @Composable
@@ -191,8 +195,12 @@ private fun GScanNavigation(
         composable(Route.SECURITY) {
             SecurityScreen(onBackClick = navController::navigateUp)
         }
-        composable(Route.BACKUP) {
-            BackupScreen(onBackClick = navController::navigateUp)
+        composable(Route.ABOUT_PRIVACY) {
+            AboutPrivacyScreen(onBackClick = navController::navigateUp)
         }
+        // Bật lại khi BackupScreen có luồng xuất và khôi phục dữ liệu hoàn chỉnh.
+        // composable(Route.BACKUP) {
+        //     BackupScreen(onBackClick = navController::navigateUp)
+        // }
     }
 }
