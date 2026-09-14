@@ -95,7 +95,7 @@ private val quickActions = listOf(
 private val tools = listOf(
     ToolUiModel(HomeFeature.SIGNATURE, "Chữ ký", "Ký và điền biểu mẫu", Icons.Outlined.Draw, Color(0xFF7F56D9)),
     ToolUiModel(HomeFeature.QR_BARCODE, "QR & barcode", "Quét mã trên thiết bị", Icons.Outlined.QrCodeScanner, Color(0xFF0E7090)),
-    ToolUiModel(HomeFeature.SECURITY, "Bảo mật", "Khóa tài liệu riêng tư", Icons.Outlined.Lock, Color(0xFF344054)),
+    ToolUiModel(HomeFeature.SECURITY, "Bảo mật", "Khóa truy cập ứng dụng", Icons.Outlined.Lock, Color(0xFF344054)),
     ToolUiModel(HomeFeature.BACKUP, "Sao lưu", "Xuất và khôi phục dữ liệu", Icons.Outlined.CloudUpload, Color(0xFF155EEF)),
 )
 

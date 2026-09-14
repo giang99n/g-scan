@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavHostController
 import com.example.gscan.feature.backup.presentation.BackupScreen
 import com.example.gscan.feature.documents.presentation.DocumentsRoute
 import com.example.gscan.feature.documents.presentation.TrashRoute
@@ -19,6 +20,7 @@ import com.example.gscan.feature.ocr.presentation.OcrRoute
 import com.example.gscan.feature.scanner.presentation.ImportScreen
 import com.example.gscan.feature.scanner.presentation.ScannerScreen
 import com.example.gscan.feature.security.presentation.SecurityScreen
+import com.example.gscan.feature.security.presentation.AppLockGate
 import com.example.gscan.feature.tools.presentation.QrBarcodeScreen
 
 private object Route {
@@ -59,7 +61,17 @@ fun GScanApp(
     onSharedPdfConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    AppLockGate {
+        GScanNavigation(navController, sharedPdfUri, onSharedPdfConsumed)
+    }
+}
 
+@Composable
+private fun GScanNavigation(
+    navController: NavHostController,
+    sharedPdfUri: String?,
+    onSharedPdfConsumed: () -> Unit,
+) {
     LaunchedEffect(sharedPdfUri) {
         if (sharedPdfUri != null) {
             navController.navigate(Route.IMPORT) { launchSingleTop = true }

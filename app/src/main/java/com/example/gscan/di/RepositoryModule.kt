@@ -8,6 +8,8 @@ import com.example.gscan.feature.ocr.data.OfflineOcrRepository
 import com.example.gscan.feature.ocr.domain.repository.OcrRepository
 import com.example.gscan.feature.scanner.data.OfflineScanRepository
 import com.example.gscan.feature.scanner.domain.repository.ScanRepository
+import com.example.gscan.feature.security.data.KeystoreAppLockRepository
+import com.example.gscan.feature.security.domain.repository.AppLockRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -17,6 +19,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+    @Binds
+    @Singleton
+    abstract fun bindAppLockRepository(
+        implementation: KeystoreAppLockRepository,
+    ): AppLockRepository
+
     @Binds
     abstract fun bindBarcodeScanner(
         implementation: com.example.gscan.feature.tools.data.GoogleBarcodeScanner,

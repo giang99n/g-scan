@@ -180,6 +180,7 @@ Schema hiện tại là version 7. Bảng `documents` có `deletedAtEpochMillis`
 - Không nhúng API secret dùng chung trong APK.
 - OAuth mobile dùng authorization code + PKCE theo provider; token lưu bằng cơ chế mã hóa phù hợp.
 - Android Auto Backup giữ tắt cho tới khi Room và toàn bộ file có restore nhất quán; ưu tiên explicit encrypted archive backup/restore.
+- App Lock đi qua `AppLockGate/AppLockViewModel → AppLockUseCases → AppLockRepository → KeystoreAppLockRepository`. Gate nằm ngoài `NavHost`, nên màn tài liệu và shared-PDF navigation không được compose trước khi mở khóa; `NavHostController` được giữ ở app shell để không mất màn hiện tại khi khóa giữa phiên. Cấu hình local nằm trong SharedPreferences riêng khi Auto Backup đang tắt; PIN 6 số được biến đổi bằng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên (fallback PBKDF2-HMAC-SHA1 nếu Android provider cũ không có SHA-256), sau đó verifier được mã hóa AES-256-GCM bằng khóa Android Keystore riêng. Năm lần PIN sai tạo delay 30 giây và mọi lỗi ghi bộ đếm đều fail-closed. BiometricPrompt dùng `BIOMETRIC_STRONG` cùng một khóa Keystore auth-per-use riêng; khóa bị vô hiệu hóa khi enrollment thay đổi và người dùng phải mở bằng PIN rồi bật lại biometric. Prompt được đăng ký sớm theo lifecycle Activity và luôn giữ PIN làm fallback. Khi App Lock bật, Activity dùng `FLAG_SECURE`; đây không phải mã hóa Room/source file.
 - Cloud riêng, web portal, realtime collaboration, expiring share link và remote logout bị loại vì cần server state/authorization do GScan vận hành.
 
 ## 10. Thứ tự theo dependency
