@@ -32,7 +32,3 @@ OCR tiếng Việt/Anh chạy on-device và hỗ trợ xuất kết quả theo t
 ```bash
 ./gradlew assembleDebug
 ```
-
-Mục tiêu và feature map sản phẩm: [docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md).
-
-Kiến trúc và thứ tự dependency kỹ thuật: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
