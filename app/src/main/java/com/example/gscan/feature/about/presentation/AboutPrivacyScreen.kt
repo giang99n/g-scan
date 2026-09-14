@@ -66,19 +66,19 @@ fun AboutPrivacyScreen(onBackClick: () -> Unit) {
                 style = MaterialTheme.typography.labelMedium,
             )
             Text(
-                text = "Chính sách này mô tả cách GScan (com.aloalo.gscan), do Giang Nguyen phát hành, xử lý dữ liệu khi bạn sử dụng ứng dụng.",
+                text = "Chính sách này mô tả cách AloScan (com.aloalo.gscan), do Giang Nguyen phát hành, xử lý dữ liệu khi bạn sử dụng ứng dụng.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
             PrivacyItem(
                 icon = Icons.Rounded.Storage,
                 title = "Dữ liệu được xử lý",
-                description = "GScan xử lý tài liệu và ảnh bạn chọn hoặc quét, tên tài liệu, thư mục, tag, thứ tự và góc xoay trang, kết quả OCR, chữ ký bạn tạo, lịch sử QR/barcode và cài đặt khóa ứng dụng để cung cấp các chức năng bạn yêu cầu.",
+                description = "AloScan xử lý tài liệu và ảnh bạn chọn hoặc quét, tên tài liệu, thư mục, tag, thứ tự và góc xoay trang, kết quả OCR, chữ ký bạn tạo, lịch sử QR/barcode và cài đặt khóa ứng dụng để cung cấp các chức năng bạn yêu cầu.",
             )
             PrivacyItem(
                 icon = Icons.Rounded.CloudOff,
                 title = "Lưu trữ và truyền dữ liệu",
-                description = "Dữ liệu được lưu trong vùng riêng của ứng dụng trên thiết bị. GScan không yêu cầu tài khoản, không có quảng cáo, không vận hành máy chủ và không tự tải nội dung tài liệu lên máy chủ của nhà phát hành.",
+                description = "Dữ liệu được lưu trong vùng riêng của ứng dụng trên thiết bị. AloScan không yêu cầu tài khoản, không có quảng cáo, không vận hành máy chủ và không tự tải nội dung tài liệu lên máy chủ của nhà phát hành.",
             )
             PrivacyItem(
                 icon = Icons.Rounded.Lock,
@@ -107,7 +107,7 @@ fun AboutPrivacyScreen(onBackClick: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "GScan không chủ đích thu thập dữ liệu cá nhân của trẻ em và không cung cấp tài khoản hay nội dung hướng tới trẻ em. Nếu cách xử lý dữ liệu thay đổi, nội dung chính sách và ngày có hiệu lực trong ứng dụng sẽ được cập nhật.",
+                text = "AloScan không chủ đích thu thập dữ liệu cá nhân của trẻ em và không cung cấp tài khoản hay nội dung hướng tới trẻ em. Nếu cách xử lý dữ liệu thay đổi, nội dung chính sách và ngày có hiệu lực trong ứng dụng sẽ được cập nhật.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -135,7 +135,7 @@ private fun AboutCard() {
         ) {
             Icon(Icons.Rounded.Info, contentDescription = null)
             Column(modifier = Modifier.padding(start = 14.dp)) {
-                Text("GScan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("AloScan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
                     "Máy scan và bộ công cụ tài liệu ưu tiên xử lý trên thiết bị",
                     style = MaterialTheme.typography.bodyMedium,
@@ -175,7 +175,7 @@ private fun PrivacyItem(
 
 private fun Context.emailSupport() {
     val intent = Intent(Intent.ACTION_SENDTO, "mailto:$SUPPORT_EMAIL".toUri()).apply {
-        putExtra(Intent.EXTRA_SUBJECT, "Hỗ trợ GScan")
+        putExtra(Intent.EXTRA_SUBJECT, "Hỗ trợ AloScan")
     }
     runCatching { startActivity(intent) }
         .onFailure { Toast.makeText(this, "Không tìm thấy ứng dụng email.", Toast.LENGTH_SHORT).show() }

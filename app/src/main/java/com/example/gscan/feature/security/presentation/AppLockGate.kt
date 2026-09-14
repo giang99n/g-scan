@@ -135,7 +135,7 @@ private fun AppUnlockScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.height(20.dp))
-                Text("GScan đang được khóa", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("AloScan đang được khóa", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
                     "Nhập PIN để tiếp tục xem tài liệu của bạn.",
                     modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
@@ -173,7 +173,7 @@ private fun AppUnlockScreen(
                             when (val preparation = AppLockBiometricCrypto.prepareAuthentication(false)) {
                                 is BiometricCryptoPreparation.Ready -> biometricPrompt.authenticate(
                                     createBiometricPromptInfo(
-                                        title = "Mở khóa GScan",
+                                        title = "Mở khóa AloScan",
                                         subtitle = "Xác thực để xem tài liệu",
                                     ),
                                     preparation.cryptoObject,

@@ -28,12 +28,12 @@ internal fun ScanSaveFailure.toUserMessage(inputKind: SaveInputKind): String = w
     }
     ScanSaveFailure.INVALID_PDF -> "File đã chọn không phải PDF hợp lệ hoặc đã bị hỏng."
     ScanSaveFailure.PDF_PASSWORD_PROTECTED ->
-        "PDF đang được bảo vệ bằng mật khẩu. GScan chưa thể nhập file này."
+        "PDF đang được bảo vệ bằng mật khẩu. AloScan chưa thể nhập file này."
     ScanSaveFailure.INSUFFICIENT_MEMORY ->
         "Thiết bị không đủ bộ nhớ để xử lý PDF này. Hãy đóng bớt ứng dụng và thử lại."
     ScanSaveFailure.DATABASE_ERROR ->
         "Không thể ghi tài liệu vào thư viện. Các file vừa tạo đã được dọn dẹp."
     ScanSaveFailure.CLEANUP_FAILED ->
-        "Lưu tài liệu thất bại và chưa thể dọn hết file tạm. GScan sẽ thử dọn lại khi mở app."
+        "Lưu tài liệu thất bại và chưa thể dọn hết file tạm. AloScan sẽ thử dọn lại khi mở app."
     ScanSaveFailure.UNKNOWN -> "Không thể lưu tài liệu. Vui lòng thử lại."
 }

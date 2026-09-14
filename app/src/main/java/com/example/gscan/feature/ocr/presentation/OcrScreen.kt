@@ -95,7 +95,7 @@ fun OcrRoute(
                 .filter { it.text.isNotBlank() }
                 .joinToString("\n\n") { "Trang ${it.position + 1}\n${it.text}" }
             if (text.isNotBlank()) {
-                context.copyText(uiState.title ?: "GScan OCR", text)
+                context.copyText(uiState.title ?: "AloScan OCR", text)
                 scope.launch { snackbarHostState.showSnackbar("Đã sao chép toàn bộ văn bản.") }
             }
         },
@@ -118,7 +118,7 @@ fun OcrRoute(
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = TEXT_MIME_TYPE
                         putExtra(Intent.EXTRA_STREAM, contentUri)
-                        clipData = ClipData.newRawUri("GScan OCR", contentUri)
+                        clipData = ClipData.newRawUri("AloScan OCR", contentUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, "Chia sẻ văn bản OCR"))
