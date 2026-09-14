@@ -9,4 +9,13 @@
 .externalNativeBuild
 .cxx
 local.properties
-/docs/PROJECT_GOAL.md
+
+# Local project documentation; only the public privacy policy is versioned.
+/docs/**
+!/docs/privacy/
+!/docs/privacy/**
+
+# Release signing secrets
+/keystore.properties
+*.jks
+*.keystore

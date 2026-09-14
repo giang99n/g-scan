@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,17 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun Properties.requiredSigningProperty(name: String): String =
+    getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: error("Missing signing property '$name' in keystore.properties")
+
 android {
     namespace = "com.example.gscan"
     compileSdk {
@@ -13,17 +26,29 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.gscan"
+        applicationId = "com.aloalo.gscan"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.isFile) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.requiredSigningProperty("storeFile"))
+                storePassword = keystoreProperties.requiredSigningProperty("storePassword")
+                keyAlias = keystoreProperties.requiredSigningProperty("keyAlias")
+                keyPassword = keystoreProperties.requiredSigningProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -39,7 +64,16 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        check(keystorePropertiesFile.isFile) {
+            "keystore.properties is required to build a signed release."
+        }
     }
 }
 
@@ -72,6 +106,7 @@ dependencies {
     implementation(libs.mlkit.text.recognition)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
+    implementation(libs.androidx.biometric)
     kapt(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)

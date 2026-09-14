@@ -19,7 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudUpload
+// Backup chưa có implementation; giữ import để bật lại khi hoàn thiện tính năng.
+// import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
@@ -33,11 +34,12 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.NotificationsNone
+// Thông báo chưa có luồng xử lý; giữ import để bật lại khi triển khai.
+// import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+// import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -66,7 +68,8 @@ enum class HomeFeature {
     SIGNATURE,
     QR_BARCODE,
     SECURITY,
-    BACKUP,
+    ABOUT_PRIVACY,
+    // BACKUP,
 }
 
 private data class QuickActionUiModel(
@@ -93,10 +96,11 @@ private val quickActions = listOf(
 )
 
 private val tools = listOf(
-    ToolUiModel(HomeFeature.SIGNATURE, "Chữ ký", "Ký và điền biểu mẫu", Icons.Outlined.Draw, Color(0xFF7F56D9)),
+    ToolUiModel(HomeFeature.SIGNATURE, "Chữ ký", "Tạo và đặt chữ ký lên tài liệu", Icons.Outlined.Draw, Color(0xFF7F56D9)),
     ToolUiModel(HomeFeature.QR_BARCODE, "QR & barcode", "Quét mã trên thiết bị", Icons.Outlined.QrCodeScanner, Color(0xFF0E7090)),
-    ToolUiModel(HomeFeature.SECURITY, "Bảo mật", "Khóa tài liệu riêng tư", Icons.Outlined.Lock, Color(0xFF344054)),
-    ToolUiModel(HomeFeature.BACKUP, "Sao lưu", "Xuất và khôi phục dữ liệu", Icons.Outlined.CloudUpload, Color(0xFF155EEF)),
+    ToolUiModel(HomeFeature.SECURITY, "Bảo mật", "Khóa truy cập ứng dụng", Icons.Outlined.Lock, Color(0xFF344054)),
+    // Bật lại khi BackupScreen có luồng xuất và khôi phục dữ liệu hoàn chỉnh.
+    // ToolUiModel(HomeFeature.BACKUP, "Sao lưu", "Xuất và khôi phục dữ liệu", Icons.Outlined.CloudUpload, Color(0xFF155EEF)),
 )
 
 @Composable
@@ -147,8 +151,6 @@ fun HomeScreen(onFeatureClick: (HomeFeature) -> Unit) {
             item {
                 SectionTitle(
                     title = "Khám phá công cụ",
-                    action = "Xem tất cả",
-                    onActionClick = { onFeatureClick(HomeFeature.PDF_TOOLS) },
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
             }
@@ -169,7 +171,10 @@ fun HomeScreen(onFeatureClick: (HomeFeature) -> Unit) {
             }
 
             item {
-                PrivacyBanner(modifier = Modifier.padding(horizontal = 20.dp))
+                PrivacyBanner(
+                    onClick = { onFeatureClick(HomeFeature.ABOUT_PRIVACY) },
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
             }
         }
     }
@@ -204,9 +209,10 @@ private fun HomeHeader() {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        IconButton(onClick = {}) {
-            Icon(Icons.Rounded.NotificationsNone, contentDescription = "Thông báo")
-        }
+        // Bật lại khi có màn hình hoặc luồng thông báo thực tế.
+        // IconButton(onClick = {}) {
+        //     Icon(Icons.Rounded.NotificationsNone, contentDescription = "Thông báo")
+        // }
     }
 }
 
@@ -351,9 +357,12 @@ private fun ToolCard(
 }
 
 @Composable
-private fun PrivacyBanner(modifier: Modifier = Modifier) {
+private fun PrivacyBanner(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
         color = Color(0xFFECFDF3),
         contentColor = Color(0xFF027A48),
         shape = RoundedCornerShape(18.dp),
@@ -361,11 +370,12 @@ private fun PrivacyBanner(modifier: Modifier = Modifier) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
             Text(
-                text = "Riêng tư mặc định · Ưu tiên xử lý và lưu tài liệu trên thiết bị.",
-                modifier = Modifier.padding(start = 10.dp),
+                text = "Giới thiệu & quyền riêng tư · Dữ liệu ưu tiên lưu trên thiết bị.",
+                modifier = Modifier.weight(1f).padding(start = 10.dp),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
             )
+            Icon(Icons.Rounded.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -375,11 +385,11 @@ private fun SectionTitle(
     title: String,
     modifier: Modifier = Modifier,
     action: String? = null,
-    onActionClick: () -> Unit = {},
+    onActionClick: (() -> Unit)? = null,
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        if (action != null) {
+        if (action != null && onActionClick != null) {
             Text(
                 text = action,
                 modifier = Modifier.clickable(onClick = onActionClick).padding(vertical = 6.dp),

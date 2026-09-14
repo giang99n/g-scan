@@ -3,19 +3,19 @@ package com.example.gscan
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.IntentCompat
+import androidx.fragment.app.FragmentActivity
 import com.example.gscan.app.GScanApp
 import com.example.gscan.core.designsystem.theme.GScanTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var sharedPdfUri by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
