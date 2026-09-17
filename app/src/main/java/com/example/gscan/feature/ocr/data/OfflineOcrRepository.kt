@@ -210,7 +210,7 @@ class OfflineOcrRepository @Inject constructor(
             try {
                 temporary.outputStream().bufferedWriter(StandardCharsets.UTF_8).use { writer ->
                     writer.appendLine(details.document.title)
-                    writer.appendLine("Xuất từ GScan")
+                    writer.appendLine("Xuất từ AloScan")
                     writer.appendLine()
                     exportablePages.forEachIndexed { index, page ->
                         currentCoroutineContext().ensureActive()
@@ -431,7 +431,7 @@ class OfflineOcrRepository @Inject constructor(
         const val MIN_FREE_SPACE_BYTES = 1024L * 1024L
         const val TEXT_EXPORT_RETENTION_MILLIS = 24L * 60L * 60L * 1_000L
         const val MAX_FILE_NAME_LENGTH = 40
-        const val DEFAULT_FILE_NAME = "GScan-OCR"
+        const val DEFAULT_FILE_NAME = "AloScan-OCR"
         val INVALID_FILE_NAME_CHARACTERS = Regex("[\\\\/:*?\"<>|]")
     }
 }

@@ -162,7 +162,7 @@ private fun PageEditException.toUserMessage(): String = when (reason) {
     PageEditFailure.PAGE_NOT_FOUND -> "Trang không còn tồn tại."
     PageEditFailure.LAST_PAGE -> "Không thể xóa trang duy nhất của tài liệu."
     PageEditFailure.INVALID_POSITION -> "Vị trí trang không hợp lệ."
-    PageEditFailure.NO_PAGES -> "Bạn chưa chọn ảnh nào."
+    PageEditFailure.NO_PAGES -> "Bạn chưa chọn ảnh."
     PageEditFailure.EMPTY_DOCUMENT -> "Tài liệu chưa có trang để nhân bản."
     PageEditFailure.TOO_MANY_PAGES -> "Mỗi tài liệu chỉ hỗ trợ tối đa 100 trang."
     PageEditFailure.SOURCE_UNAVAILABLE -> "Không thể đọc một hoặc nhiều ảnh đã chọn."

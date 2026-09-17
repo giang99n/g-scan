@@ -188,7 +188,7 @@ private fun ScannerContent(
             Spacer(Modifier.height(10.dp))
             Text(
                 text = if (uiState.isSaving) {
-                    "GScan đang sao chép các trang vào vùng lưu trữ an toàn."
+                    "AloScan đang sao chép các trang vào vùng lưu trữ an toàn."
                 } else {
                     "Tự động nhận diện viền, chỉnh phối cảnh, xoay và áp dụng bộ lọc bằng ML Kit."
                 },
@@ -199,7 +199,7 @@ private fun ScannerContent(
             Spacer(Modifier.height(28.dp))
 
             ScannerBenefit(Icons.Rounded.Collections, "Tối đa $MAX_SCAN_PAGES trang mỗi tài liệu")
-            ScannerBenefit(Icons.Rounded.CheckCircle, "Không cần cấp quyền camera cho GScan")
+            ScannerBenefit(Icons.Rounded.CheckCircle, "Không cần cấp quyền camera cho AloScan")
             ScannerBenefit(Icons.Rounded.CloudDownload, "Lần đầu có thể cần tải module từ Google Play services")
 
             uiState.errorMessage?.let { message ->

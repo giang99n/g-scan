@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Gscan"
+rootProject.name = "AloScan"
 include(":app")

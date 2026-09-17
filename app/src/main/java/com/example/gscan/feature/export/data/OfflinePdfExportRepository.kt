@@ -393,7 +393,7 @@ class OfflinePdfExportRepository @Inject constructor(
         const val MIN_FREE_SPACE_BYTES = 10L * 1024L * 1024L
         const val EXPORT_RETENTION_MILLIS = 24L * 60L * 60L * 1_000L
         const val MAX_FILE_NAME_CODE_POINTS = 40L
-        const val DEFAULT_FILE_NAME = "GScan"
+        const val DEFAULT_FILE_NAME = "AloScan"
         const val A4_SHORT_EDGE = 595
         const val A4_LONG_EDGE = 842
         const val PDF_CATALOG_OBJECT = 1

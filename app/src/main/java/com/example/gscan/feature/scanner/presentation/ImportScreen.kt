@@ -179,9 +179,9 @@ private fun ImportContent(
             Text(
                 text = if (uiState.isSaving) {
                     if (uiState.inputKind == SaveInputKind.PDF) {
-                        "GScan đang chuyển từng trang PDF thành tài liệu trên thiết bị."
+                        "AloScan đang chuyển từng trang PDF thành tài liệu trên thiết bị."
                     } else {
-                        "GScan đang sao chép ảnh vào vùng lưu trữ riêng và tạo tài liệu."
+                        "AloScan đang sao chép ảnh vào vùng lưu trữ riêng và tạo tài liệu."
                     }
                 } else {
                     "Chọn nhiều ảnh hoặc một PDF; dữ liệu được xử lý và lưu hoàn toàn trên thiết bị."

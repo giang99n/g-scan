@@ -89,7 +89,7 @@ fun SecurityScreen(
             SecurityStatusCard(state.settings.enabled)
             if (!state.settings.enabled) {
                 Text(
-                    "Khóa GScan khi mở ứng dụng để người khác không thể xem tài liệu nếu đang cầm thiết bị của bạn.",
+                    "Khóa AloScan khi mở ứng dụng để người khác không thể xem tài liệu nếu đang cầm thiết bị của bạn.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
@@ -109,7 +109,7 @@ fun SecurityScreen(
                                 is BiometricCryptoPreparation.Ready -> biometricPrompt.authenticate(
                                     createBiometricPromptInfo(
                                         title = "Bật mở khóa sinh trắc học",
-                                        subtitle = "Xác thực để liên kết sinh trắc học với GScan",
+                                        subtitle = "Xác thực để liên kết sinh trắc học với AloScan",
                                         negativeButtonText = "Hủy",
                                     ),
                                     preparation.cryptoObject,
@@ -173,7 +173,7 @@ private fun SecurityStatusCard(enabled: Boolean) {
             Column(Modifier.padding(start = 14.dp)) {
                 Text(if (enabled) "Khóa ứng dụng đang bật" else "Khóa ứng dụng đang tắt", fontWeight = FontWeight.Bold)
                 Text(
-                    if (enabled) "GScan sẽ yêu cầu xác thực sau thời gian đã chọn."
+                    if (enabled) "AloScan sẽ yêu cầu xác thực sau thời gian đã chọn."
                     else "Tài liệu có thể được mở ngay khi vào ứng dụng.",
                     style = MaterialTheme.typography.bodySmall,
                 )

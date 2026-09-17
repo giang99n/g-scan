@@ -99,7 +99,7 @@ fun PdfToolsScreen(
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = PDF_MIME_TYPE
                         putExtra(Intent.EXTRA_STREAM, contentUri)
-                        clipData = ClipData.newRawUri("GScan PDF", contentUri)
+                        clipData = ClipData.newRawUri("AloScan PDF", contentUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, "Chia sẻ PDF"))

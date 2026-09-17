@@ -191,7 +191,7 @@ private fun HomeHeader() {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "G",
+                text = "A",
                 color = MaterialTheme.colorScheme.onPrimary,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
@@ -199,7 +199,7 @@ private fun HomeHeader() {
         }
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
-                text = "GScan",
+                text = "AloScan",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
