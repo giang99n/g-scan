@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -283,3 +284,11 @@ private fun Throwable.toScannerMessage(): String = when {
 }
 
 private const val MAX_SCAN_PAGES = 100
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun ScannerScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        ScannerContent(uiState = ScannerUiState(), onBackClick = {}, onStartScan = {})
+    }
+}

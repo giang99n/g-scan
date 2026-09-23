@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +70,47 @@ fun SecurityScreen(
         },
         onError = viewModel::showError,
     )
+    SecurityContent(
+        state = state,
+        biometricAvailable = biometricAvailable,
+        onBackClick = onBackClick,
+        onClearError = viewModel::clearError,
+        onBiometricChange = { enabled ->
+            if (!enabled) {
+                viewModel.setBiometricEnabled(false)
+            } else if (biometricPrompt != null) {
+                when (val preparation = AppLockBiometricCrypto.prepareAuthentication(true)) {
+                    is BiometricCryptoPreparation.Ready -> biometricPrompt.authenticate(
+                        createBiometricPromptInfo(
+                            title = "Bật mở khóa sinh trắc học",
+                            subtitle = "Xác thực để liên kết sinh trắc học với AloScan",
+                            negativeButtonText = "Hủy",
+                        ),
+                        preparation.cryptoObject,
+                    )
+                    is BiometricCryptoPreparation.Unavailable -> viewModel.showError(preparation.message)
+                }
+            }
+        },
+        onTimeoutSelected = viewModel::setTimeout,
+        onEnable = viewModel::enable,
+        onChangePin = viewModel::changePin,
+        onDisable = viewModel::disable,
+    )
+}
+
+@Composable
+private fun SecurityContent(
+    state: SecurityUiState,
+    biometricAvailable: Boolean,
+    onBackClick: () -> Unit,
+    onClearError: () -> Unit,
+    onBiometricChange: (Boolean) -> Unit,
+    onTimeoutSelected: (AppLockTimeout) -> Unit,
+    onEnable: (String, String) -> Unit,
+    onChangePin: (String, String, String) -> Unit,
+    onDisable: (String) -> Unit,
+) {
     var dialogMode by remember { mutableStateOf<PinDialogMode?>(null) }
 
     LaunchedEffect(state.completedOperationVersion) {
@@ -93,7 +135,7 @@ fun SecurityScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
-                    onClick = { viewModel.clearError(); dialogMode = PinDialogMode.ENABLE },
+                    onClick = { onClearError(); dialogMode = PinDialogMode.ENABLE },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                 ) { Text("Bật khóa ứng dụng") }
             } else {
@@ -101,36 +143,20 @@ fun SecurityScreen(
                     enabled = state.settings.biometricEnabled,
                     available = biometricAvailable,
                     processing = state.processing,
-                    onChange = { enabled ->
-                        if (!enabled) {
-                            viewModel.setBiometricEnabled(false)
-                        } else if (biometricPrompt != null) {
-                            when (val preparation = AppLockBiometricCrypto.prepareAuthentication(true)) {
-                                is BiometricCryptoPreparation.Ready -> biometricPrompt.authenticate(
-                                    createBiometricPromptInfo(
-                                        title = "Bật mở khóa sinh trắc học",
-                                        subtitle = "Xác thực để liên kết sinh trắc học với AloScan",
-                                        negativeButtonText = "Hủy",
-                                    ),
-                                    preparation.cryptoObject,
-                                )
-                                is BiometricCryptoPreparation.Unavailable -> viewModel.showError(preparation.message)
-                            }
-                        }
-                    },
+                    onChange = onBiometricChange,
                 )
                 TimeoutOptions(
                     selected = state.settings.lockTimeout,
                     enabled = !state.processing,
-                    onSelect = viewModel::setTimeout,
+                    onSelect = onTimeoutSelected,
                 )
                 OutlinedButton(
-                    onClick = { viewModel.clearError(); dialogMode = PinDialogMode.CHANGE },
+                    onClick = { onClearError(); dialogMode = PinDialogMode.CHANGE },
                     enabled = !state.processing,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Đổi PIN") }
                 FilledTonalButton(
-                    onClick = { viewModel.clearError(); dialogMode = PinDialogMode.DISABLE },
+                    onClick = { onClearError(); dialogMode = PinDialogMode.DISABLE },
                     enabled = !state.processing,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Tắt khóa ứng dụng") }
@@ -151,10 +177,10 @@ fun SecurityScreen(
             mode = mode,
             processing = state.processing,
             errorMessage = state.errorMessage,
-            onDismiss = { if (!state.processing) { dialogMode = null; viewModel.clearError() } },
-            onEnable = viewModel::enable,
-            onChange = viewModel::changePin,
-            onDisable = viewModel::disable,
+            onDismiss = { if (!state.processing) { dialogMode = null; onClearError() } },
+            onEnable = onEnable,
+            onChange = onChangePin,
+            onDisable = onDisable,
         )
     }
 }
@@ -310,3 +336,17 @@ private val AppLockTimeout.label: String
     }
 
 private const val PIN_LENGTH = 6
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun SecurityScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        SecurityContent(
+            state = SecurityUiState(),
+            biometricAvailable = true,
+            onBackClick = {}, onClearError = {}, onBiometricChange = {},
+            onTimeoutSelected = {}, onEnable = { _, _ -> },
+            onChangePin = { _, _, _ -> }, onDisable = {},
+        )
+    }
+}

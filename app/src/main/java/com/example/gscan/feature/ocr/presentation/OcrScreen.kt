@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -495,3 +496,17 @@ private fun Context.copyText(label: String, text: String) {
 }
 
 private const val TEXT_MIME_TYPE = "text/plain"
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun OcrScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        OcrScreen(
+            uiState = OcrUiState(isLoading = false, detailsAvailable = true, title = "Hóa đơn tháng 9"),
+            snackbarHostState = remember { SnackbarHostState() },
+            onBackClick = {}, onStartClick = {}, onCancelClick = {}, onCopyPage = {},
+            onCopyAll = {}, onExportModeSelected = {}, onCreateText = {},
+            onSaveText = {}, onShareText = {},
+        )
+    }
+}

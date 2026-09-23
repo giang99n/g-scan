@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.gscan.core.designsystem.component.GScanTopAppBar
@@ -452,6 +453,22 @@ private fun DocumentDetailMessage(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun DocumentDetailScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        DocumentDetailScreen(
+            uiState = DocumentDetailUiState(isLoading = false),
+            listState = rememberLazyListState(),
+            snackbarHostState = remember { SnackbarHostState() },
+            onBackClick = {}, onExportClick = {}, onOcrClick = {}, onSignatureClick = {},
+            onAddPagesClick = {}, onCancelAddPages = {}, onRenameDocument = {},
+            onRotateClick = {}, onMoveClick = { _, _ -> }, onDeleteClick = {},
+            onDuplicateClick = {},
         )
     }
 }

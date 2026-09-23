@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -211,3 +212,15 @@ private fun TrashDocumentCard(
 private fun Long?.toDeletedLabel(): String = this?.let {
     DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
 } ?: "gần đây"
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun TrashScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        TrashScreen(
+            uiState = TrashUiState(isLoading = false),
+            snackbarHostState = remember { SnackbarHostState() },
+            onBackClick = {}, onRestore = {}, onPermanentlyDelete = {}, onEmptyTrash = {},
+        )
+    }
+}

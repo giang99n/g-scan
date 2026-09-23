@@ -68,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -209,7 +210,7 @@ private fun DocumentsScreen(
         onApply = { added, removed -> showTags = false; onUpdateTags(added, removed) },
     )
     if (showFolders) OrganizationManagerDialog(
-        title = "Quản lý folder",
+        title = "Quản lý folderss",
         itemLabel = "folder",
         items = uiState.folders.map { it.id to it.name },
         onDismiss = { showFolders = false; onClearOrganizationError() },
@@ -294,7 +295,7 @@ private fun DocumentsScreen(
             )
         },
         floatingActionButton = {
-            if (!selectionMode) FloatingActionButton(onClick = onScanClick) { Text("Scan", modifier = Modifier.padding(horizontal = 16.dp)) }
+            if (!selectionMode) FloatingActionButton(onClick = onScanClick) { Text("scan", modifier = Modifier.padding(horizontal = 16.dp)) }
         },
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
@@ -633,3 +634,24 @@ private fun DocumentThumbnail(uri: String?, title: String, rotationDegrees: Int,
 
 private fun DocumentStatus.toLabel(): String = when (this) { DocumentStatus.DRAFT -> "Bản nháp"; DocumentStatus.PROCESSING -> "Đang xử lý"; DocumentStatus.READY -> "Sẵn sàng"; DocumentStatus.FAILED -> "Có lỗi" }
 private const val THUMBNAIL_MAX_SIZE_PX = 256
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun DocumentsScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        DocumentsScreen(
+            uiState = DocumentsUiState(isLoading = false),
+            snackbarHostState = remember { SnackbarHostState() },
+            onBackClick = {}, onScanClick = {}, onDocumentClick = {},
+            onDeleteDocument = {}, onDuplicateDocument = {}, onSearchQueryChange = {},
+            title = "Tài liệu", onComposeClick = {}, onTrashClick = {}, organizationEnabled = true,
+            onSelectFolder = {}, onSelectTag = {}, onToggleFavoriteFilter = {},
+            onToggleFavorite = { _, _ -> }, onToggleSelection = {}, onClearSelection = {},
+            onSelectAll = {}, onFavoriteSelected = {}, onMoveSelected = {},
+            onUpdateTags = { _, _ -> }, onTrashSelected = {}, onCreateFolder = {},
+            onRenameFolder = { _, _ -> }, onDeleteFolder = {}, onCreateTag = {},
+            onRenameTag = { _, _ -> }, onDeleteTag = {}, onClearFilters = {},
+            onClearOrganizationError = {},
+        )
+    }
+}

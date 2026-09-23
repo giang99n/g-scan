@@ -199,15 +199,15 @@ private fun HomeHeader() {
         }
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
-                text = "AloScan",
+                text = "Alo Scan",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
-            Text(
-                text = "Tài liệu của bạn, gọn trong một chạm",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
+//            Text(
+//                text = "Tài liệu của bạn, gọn trong một chạm",
+//                color = MaterialTheme.colorScheme.onSurfaceVariant,
+//                style = MaterialTheme.typography.bodySmall,
+//            )
         }
         // Bật lại khi có màn hình hoặc luồng thông báo thực tế.
         // IconButton(onClick = {}) {

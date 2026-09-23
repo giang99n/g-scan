@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -281,3 +282,16 @@ private val PdfQualityPreset.description: String
     }
 
 private const val PDF_MIME_TYPE = "application/pdf"
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun PdfToolsScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        PdfToolsContent(
+            uiState = PdfToolsUiState(isLoading = false),
+            snackbarHostState = remember { SnackbarHostState() },
+            onBackClick = {}, onChooseDocument = {}, onPresetSelected = {}, onExport = {},
+            onCancelExport = {}, onSave = {}, onShare = {},
+        )
+    }
+}

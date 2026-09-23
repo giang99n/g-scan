@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -104,7 +105,6 @@ private fun AppUnlockScreen(
     onBiometricError: (String?) -> Unit,
     onBiometricUnavailable: (String) -> Unit,
 ) {
-    var pin by remember { mutableStateOf("") }
     val context = LocalContext.current
     val activity = context.findFragmentActivity()
     val biometricAvailable = rememberBiometricAvailability()
@@ -120,6 +120,36 @@ private fun AppUnlockScreen(
         },
         onError = onBiometricError,
     )
+    AppUnlockContent(
+        state = state,
+        biometricAvailable = biometricAvailable && biometricPrompt != null,
+        onUnlockWithPin = onUnlockWithPin,
+        onBiometricClick = {
+            when (val preparation = AppLockBiometricCrypto.prepareAuthentication(false)) {
+                is BiometricCryptoPreparation.Ready -> biometricPrompt?.authenticate(
+                    createBiometricPromptInfo(
+                        title = "Mở khóa AloScan",
+                        subtitle = "Xác thực để xem tài liệu",
+                    ),
+                    preparation.cryptoObject,
+                )
+                is BiometricCryptoPreparation.Unavailable -> {
+                    if (preparation.disableBiometric) onBiometricUnavailable(preparation.message)
+                    else onBiometricError(preparation.message)
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun AppUnlockContent(
+    state: AppLockUiState,
+    biometricAvailable: Boolean,
+    onUnlockWithPin: (String) -> Unit,
+    onBiometricClick: () -> Unit,
+) {
+    var pin by remember { mutableStateOf("") }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
@@ -167,26 +197,9 @@ private fun AppUnlockScreen(
                     if (state.verifying) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     else Text("Mở khóa")
                 }
-                if (state.settings.biometricEnabled && biometricAvailable && biometricPrompt != null) {
+                if (state.settings.biometricEnabled && biometricAvailable) {
                     FilledTonalButton(
-                        onClick = {
-                            when (val preparation = AppLockBiometricCrypto.prepareAuthentication(false)) {
-                                is BiometricCryptoPreparation.Ready -> biometricPrompt.authenticate(
-                                    createBiometricPromptInfo(
-                                        title = "Mở khóa AloScan",
-                                        subtitle = "Xác thực để xem tài liệu",
-                                    ),
-                                    preparation.cryptoObject,
-                                )
-                                is BiometricCryptoPreparation.Unavailable -> {
-                                    if (preparation.disableBiometric) {
-                                        onBiometricUnavailable(preparation.message)
-                                    } else {
-                                        onBiometricError(preparation.message)
-                                    }
-                                }
-                            }
-                        },
+                        onClick = onBiometricClick,
                         enabled = !state.verifying,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     ) {
@@ -276,3 +289,16 @@ internal fun Context.findFragmentActivity(): FragmentActivity? = findActivity() 
 
 private const val PIN_LENGTH = 6
 private const val BIOMETRIC_AUTHENTICATORS = BiometricManager.Authenticators.BIOMETRIC_STRONG
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun AppUnlockScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        AppUnlockContent(
+            state = AppLockUiState(locked = true),
+            biometricAvailable = false,
+            onUnlockWithPin = {},
+            onBiometricClick = {},
+        )
+    }
+}

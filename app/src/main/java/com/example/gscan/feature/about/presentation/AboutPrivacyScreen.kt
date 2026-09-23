@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.example.gscan.BuildConfig
@@ -179,4 +180,12 @@ private fun Context.emailSupport() {
     }
     runCatching { startActivity(intent) }
         .onFailure { Toast.makeText(this, "Không tìm thấy ứng dụng email.", Toast.LENGTH_SHORT).show() }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun AboutPrivacyScreenPreview() {
+    com.example.gscan.core.designsystem.theme.GScanTheme(darkTheme = false) {
+        AboutPrivacyScreen(onBackClick = {})
+    }
 }

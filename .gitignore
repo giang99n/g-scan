@@ -10,7 +10,7 @@
 .cxx
 local.properties
 
-# Local project documentation; only the public privacy policy is versioned.
+# only the public privacy policy is versioned.
 /docs/**
 !/docs/privacy/
 !/docs/privacy/**
@@ -20,5 +20,6 @@ local.properties
 *.jks
 *.keystore
 
-# Local Codex agent skills
+
 /.agents/
+/.agent/
